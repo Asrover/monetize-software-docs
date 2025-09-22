@@ -1,0 +1,437 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs,
+} from 'nextra/components';
+
+# Get Customer Portal
+
+Generate customer portal URLs programmatically for server-side integrations. This API endpoint creates customer portal URLs without requiring prior user authentication, automatically handling user creation and management.
+
+<Callout type="info">
+  **Server-Side Only:** This endpoint is designed for server-side use with API keys. For client-side integrations, use the [Client Mode Customer Portal](/docs-v2/paywall/customer-portal).
+</Callout>
+
+## Overview
+
+The Get Customer Portal API allows you to:
+
+- **Generate portal URLs programmatically** - Create customer portal links on your server
+- **Automatic user management** - Users are created automatically if they don't exist
+- **No prior authentication required** - Users don't need to be logged in beforehand
+- **Custom metadata support** - Attach user metadata for webhook events
+- **Direct integration** - Perfect for server-side applications and backend services
+
+## API Reference
+
+### Endpoint
+
+```
+POST https://onlineapp.pro/api/v1/paywall/{paywallId}/get-customer-portal
+```
+
+### Authentication
+
+Include your API key in the request header:
+
+```
+x-api-key: your-secret-api-key
+```
+
+<Steps>
+
+### Step 1: Get Your API Key
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![API Key Location](/docs/create-api-key.png)
+</div>
+
+### Step 2: Find Your Paywall ID
+
+Get your paywall ID from the paywall settings page URL:
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Paywall ID location](/docs/paywall-id-location.png)
+</div>
+
+### Step 3: Make API Request
+
+Send a POST request with the user's email and optional metadata:
+
+</Steps>
+
+## Request Parameters
+
+### URL Parameters
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Parameter</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>Required</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**paywallId**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>Your paywall identifier</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Request Body
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Field</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>Required</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**email**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>User's email address</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**userMeta**</Table.Td>
+      <Table.Td>object</Table.Td>
+      <Table.Td>No</Table.Td>
+      <Table.Td>Custom metadata linked to user and returned in webhook events</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Example Request Body
+
+```json
+{
+  "email": "user@example.com",
+  "userMeta": {
+    "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b",
+    "utm_source": "facebook",
+    "signup_date": "2024-01-15",
+    "user_type": "premium"
+  }
+}
+```
+
+## Implementation Examples
+
+<Tabs items={['JavaScript/Node.js', 'Python', 'PHP', 'cURL']}>
+  <Tabs.Tab>
+    ```javascript
+    const paywallId = '123';
+    const apiKey = 'your-secret-api-key';
+    
+    const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/get-customer-portal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey
+      },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        userMeta: {
+          "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b",
+          "utm_source": "facebook"
+        }
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Redirect user to customer portal
+      window.location.href = data.url;
+    } else {
+      console.error('Error:', data);
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    import requests
+    import json
+    
+    paywall_id = '123'
+    api_key = 'your-secret-api-key'
+    
+    url = f'https://onlineapp.pro/api/v1/paywall/{paywall_id}/get-customer-portal'
+    headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': api_key
+    }
+    data = {
+        'email': 'user@example.com',
+        'userMeta': {
+            'my-user-uuid': 'pojfoih27938y50ujtb4ip1n2b',
+            'utm_source': 'facebook'
+        }
+    }
+    
+    response = requests.post(url, headers=headers, json=data)
+    
+    if response.status_code == 200:
+        result = response.json()
+        portal_url = result['url']
+        print(f'Customer portal URL: {portal_url}')
+    else:
+        print(f'Error: {response.status_code} - {response.text}')
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```php
+    <?php
+    $paywallId = '123';
+    $apiKey = 'your-secret-api-key';
+    
+    $url = "https://onlineapp.pro/api/v1/paywall/{$paywallId}/get-customer-portal";
+    
+    $data = [
+        'email' => 'user@example.com',
+        'userMeta' => [
+            'my-user-uuid' => 'pojfoih27938y50ujtb4ip1n2b',
+            'utm_source' => 'facebook'
+        ]
+    ];
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'x-api-key: ' . $apiKey
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        $result = json_decode($response, true);
+        $portalUrl = $result['url'];
+        header("Location: {$portalUrl}");
+    } else {
+        echo "Error: {$httpCode} - {$response}";
+    }
+    ?>
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    curl -X POST https://onlineapp.pro/api/v1/paywall/123/get-customer-portal \
+      -H "Content-Type: application/json" \
+      -H "x-api-key: your-secret-api-key" \
+      -d '{
+        "email": "user@example.com",
+        "userMeta": {
+          "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b",
+          "utm_source": "facebook"
+        }
+      }'
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_..."
+}
+```
+
+### Error Responses
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Status Code</Table.Th>
+      <Table.Th>Error Type</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**400**</Table.Td>
+      <Table.Td>Bad Request</Table.Td>
+      <Table.Td>Missing parameters or invalid email format</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**401**</Table.Td>
+      <Table.Td>Unauthorized</Table.Td>
+      <Table.Td>Invalid or missing API key</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**409**</Table.Td>
+      <Table.Td>Conflict</Table.Td>
+      <Table.Td>Active purchase exists</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**500**</Table.Td>
+      <Table.Td>Internal Server Error</Table.Td>
+      <Table.Td>Server-side error occurred</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Process Flow
+
+The API follows this process:
+
+1. **Validate parameters** - Check email format and required fields
+2. **Verify API key** - Authenticate the request
+3. **Find or create user** - Automatically create user if doesn't exist
+4. **Link to paywall** - Associate user with the specified paywall
+5. **Create customer portal** - Generate secure portal URL
+6. **Return URL** - Provide portal link for user redirection
+
+## User Redirection
+
+After receiving the portal URL, redirect the user:
+
+### Same Window Redirect
+
+```javascript
+window.location.href = data.url;
+```
+
+### New Window/Tab
+
+```javascript
+window.open(data.url, '_blank');
+```
+
+### Server-Side Redirect
+
+```php
+header("Location: {$portalUrl}");
+```
+
+## Security Guidelines
+
+### API Key Security
+
+1. **Store securely** - Never expose API keys in client-side code
+2. **Environment variables** - Use secure environment variable storage
+3. **Rotate regularly** - Update API keys periodically
+4. **Restrict access** - Limit API key access to necessary personnel
+
+### Request Security
+
+1. **Use HTTPS** - Always use encrypted connections
+2. **Validate inputs** - Check email formats and required fields
+3. **Rate limiting** - Implement request rate limiting
+4. **Error handling** - Don't expose sensitive information in errors
+
+### Example Secure Implementation
+
+```javascript
+// Server-side only - never expose API key to client
+const generateCustomerPortal = async (email, userMeta) => {
+  try {
+    // Validate email format
+    if (!isValidEmail(email)) {
+      throw new Error('Invalid email format');
+    }
+
+    const response = await fetch(
+      `https://onlineapp.pro/api/v1/paywall/${process.env.PAYWALL_ID}/get-customer-portal`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.API_KEY // From secure environment
+        },
+        body: JSON.stringify({ email, userMeta })
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Customer portal generation failed:', error);
+    throw error;
+  }
+};
+```
+
+## Use Cases
+
+Allow users to manage subscriptions from within your app:
+
+```javascript
+// In user dashboard
+app.post('/manage-subscription', async (req, res) => {
+  const portalData = await generateCustomerPortal(
+    req.user.email,
+    {
+      user_id: req.user.id,
+      account_type: req.user.accountType
+    }
+  );
+
+  res.json({ portalUrl: portalData.url });
+});
+```
+
+## Troubleshooting
+
+<Accordion>
+  <Accordion.Item title="401 Unauthorized Error">
+    **Common causes:**
+    - Invalid API key
+    - API key not included in header
+    - API key expired or revoked
+    
+    **Solutions:**
+    - Verify API key is correct
+    - Check header format: `x-api-key: your-api-key`
+    - Generate new API key if needed
+  </Accordion.Item>
+  
+  <Accordion.Item title="400 Bad Request Error">
+    **Common causes:**
+    - Missing email parameter
+    - Invalid email format
+    - Invalid paywall ID
+    
+    **Solutions:**
+    - Ensure email is provided and valid
+    - Verify paywall ID is correct
+    - Check request body format
+  </Accordion.Item>
+</Accordion>
+
+## Next Steps
+
+After implementing customer portal generation:
+
+<Cards>
+  <Cards.Card 
+    title="Handle Webhooks" 
+    href="/docs-v2/webhooks/overview"
+  />
+  <Cards.Card 
+    title="Get Prices API" 
+    href="/docs-v2/server-side-sdk/get-prices"
+  />
+</Cards>

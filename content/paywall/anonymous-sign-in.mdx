@@ -1,0 +1,178 @@
+import {
+  Callout,
+  Cards,
+  Steps
+} from 'nextra/components';
+
+# Anonymous Sign-in
+
+Enable anonymous sign-ins to reduce friction for new users and improve conversion rates by allowing them to try your product without providing signup credentials.
+
+<Callout type="info">
+  **Tokenized Paywalls Only:** Anonymous sign-ins are only available for tokenized paywalls. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+</Callout>
+
+<Callout>
+  **Conversion Boost:** Anonymous sign-ins can improve login conversion rates up to 30–80%.
+</Callout>
+
+## Overview
+
+Anonymous sign-ins allow you to create temporary users who haven't signed up for your application yet. This feature:
+
+- **Lowers friction** for new users to try your product
+- **Improves conversion rates** by removing signup barriers
+- **Enables trial experiences** without email collection
+- **Maintains user sessions** locally on their device
+
+## How It Works
+
+When anonymous sign-in is enabled:
+
+1. **User clicks "Continue without account"** instead of signing in with Google
+2. **One-click CAPTCHA verification** to confirm they are human
+3. **Automatic account creation** with trial tokens deposited
+4. **Full API access** like any signed-in user
+5. **Local session storage** preserves their account on the device
+
+## Enabling Anonymous Sign-ins
+
+<Steps>
+### Go to Paywall Settings
+
+Navigate to your paywall settings page in the dashboard.
+
+### Enable Anonymous Sign-in
+
+Look for the "Anonymous Sign-in" option and toggle it on.
+
+<Callout type="info">
+  **Tokenized Paywalls Only:** This option is only available for tokenized paywalls.
+</Callout>
+
+### Save Configuration
+
+Save your paywall settings to activate anonymous sign-ins.
+
+</Steps>
+
+## User Experience
+
+### Before Anonymous Sign-in
+
+Users see only the Google sign-in option:
+
+- "Sign in with Google" button
+- Higher friction for trial users
+- Email required to access features
+
+### After Anonymous Sign-in
+
+Users see additional option:
+
+- "Sign in with Google" button (existing users)
+- **"Continue without account"** button (new option)
+- Lower friction for new users
+
+### Anonymous Sign-in Flow
+
+<Steps>
+    ### User Clicks "Continue without account"
+
+    The user chooses to proceed without creating a full account.
+
+    ### CAPTCHA Verification
+
+    A one-click CAPTCHA appears to verify the user is human:
+
+    - Simple checkbox verification
+    - Prevents bot abuse
+    - Quick completion
+
+    ### Automatic Account Creation
+
+    After CAPTCHA verification:
+
+    - Paywall window closes automatically
+    - Anonymous user account is created
+    - Trial tokens are deposited
+    - User can immediately start using the product
+
+</Steps>
+
+## Technical Implementation
+
+### Checking User Status
+
+```javascript
+// Check if user is authenticated (including anonymous users)
+try {
+  const userInfo = await paywall.getUser();
+  console.log('User authenticated:', userInfo.user);
+
+  // Check if user is anonymous
+  if (!userInfo.user.email) {
+    console.log('Anonymous user detected');
+    showAnonymousUserBanner();
+  } else {
+    console.log('Full user account:', userInfo.user.email);
+  }
+
+} catch (error) {
+  console.log('User not authenticated');
+}
+```
+
+### Anonymous User Properties
+
+Anonymous users have the same structure as regular users, except:
+
+```javascript
+{
+  user: {
+    id: "anonymous_user_123456789",
+    email: null,  // No email for anonymous users
+    name: "Anonymous User",
+    avatar: "default_avatar_url",
+    created_at: "2024-01-15T10:30:45.000Z"
+  },
+  balances: [
+    { type: "standard", count: 10 },  // Trial tokens deposited
+    { type: "advanced", count: 2 }
+  ],
+  // ... other user properties
+}
+```
+
+### Data Considerations
+
+- Anonymous users have temporary accounts
+- Data is tied to browser/device
+- Account upgrade preserves data
+- Clear browser data = lost session
+
+## Limitations
+
+### Anonymous User Restrictions
+
+1. **Purchase Requirement**: Must sign in with Google to make purchases
+2. **Device Specific**: Session tied to specific browser/device
+3. **No Email**: Cannot receive notifications or password resets
+4. **Local Storage**: Data can be lost if browser data is cleared
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Paywall Tokenization" 
+    href="/docs-v2/paywall/tokenization"
+  />
+  <Cards.Card 
+    title="Get User Data" 
+    href="/docs-v2/paywall-api/get-user"
+  />
+  <Cards.Card 
+    title="Open Paywall" 
+    href="/docs-v2/paywall-api/open"
+  />
+</Cards>

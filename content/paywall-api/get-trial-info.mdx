@@ -1,0 +1,307 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+
+# Get Trial Info
+
+Get information about the current trial state for regular paywalls, including time-based and action-based trials.
+
+<Callout type="warning">
+  **Version Requirement:** Available in paywall script version 1.0.3 and later.
+</Callout>
+
+<Callout type="info">
+  **Regular Paywalls Only:** If you have a tokenized paywall, skip this section — it's only relevant for regular paywalls. To get remaining tokens for tokenized paywalls, use [`paywall.getUser()`](/docs-v2/paywall-api/get-user) instead.
+</Callout>
+
+## Overview
+
+The `paywall.getTrialInfo()` method retrieves information about trials that are set before displaying the paywall:
+
+- **Time-based trials** - Trials with duration in hours/days
+- **Action-based trials** - Trials with limited number of actions/opens
+- **No trial** - When no trial is configured
+
+<Callout type="info">
+  **Before Paywall Trials:** This API returns information about trials set before the paywall opens. For subscription-based trials (activated after entering card details), use [`paywall.getUser()`](/docs-v2/paywall-api/get-user).
+</Callout>
+
+## API Reference
+
+### Method Signature
+
+```typescript
+paywall.getTrialInfo(): Promise<TrialInfo>
+```
+
+### Return Types
+
+<Tabs items={['Time-Based Trial', 'Action-Based Trial', 'No Trial']}>
+  <Tabs.Tab>
+    ```typescript
+    interface TimeBasedTrial {
+      /** Timestamp when trial period started (in milliseconds) */
+      expirationStart: number;
+      /** Timestamp when trial period ends (in milliseconds) */
+      expirationEnd: number;
+      /** Total duration of trial period (in milliseconds) */
+      expirationTime: number;
+      /** Whether the trial period has expired */
+      expired: boolean;
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```typescript
+    interface OpensBasedTrial {
+      /** Number of remaining trial actions available */
+      remainingActions: number;
+      /** Total number of actions allowed in trial */
+      totalActions: number;
+      /** Whether all trial actions have been used */
+      expired: boolean;
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```typescript
+    type NoTrial = 'no trial';
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Basic Usage
+
+### Checking Trial Status
+
+```javascript
+try {
+  const trialInfo = await paywall.getTrialInfo();
+
+  if (trialInfo === 'no trial') {
+    console.log('No trial available');
+  } else if ('expirationTime' in trialInfo) {
+    // Time-based trial
+    console.log(`Trial expires in ${trialInfo.expirationTime} ms`);
+  } else {
+    // Action-based trial
+    console.log(`${trialInfo.remainingActions} actions remaining`);
+  }
+} catch (error) {
+  console.error('Failed to get trial info:', error);
+}
+```
+
+## Practical Examples
+
+### Time-Based Trial Handler
+
+```javascript
+const handleTimeBasedTrial = async () => {
+  try {
+    const trialInfo = await paywall.getTrialInfo();
+
+    if (trialInfo !== 'no trial' && 'expirationTime' in trialInfo) {
+      const now = Date.now();
+      const timeRemaining = trialInfo.expirationEnd - now;
+
+      if (trialInfo.expired) {
+        console.log('Trial has expired');
+        showUpgradePrompt();
+      } else {
+        const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+        console.log(`Trial expires in ${hoursRemaining} hours`);
+        showTrialStatus(hoursRemaining);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking trial:', error);
+  }
+};
+```
+
+### Action-Based Trial Handler
+
+```javascript
+const handleActionBasedTrial = async () => {
+  try {
+    const trialInfo = await paywall.getTrialInfo();
+
+    if (trialInfo !== 'no trial' && 'remainingActions' in trialInfo) {
+      if (trialInfo.expired) {
+        console.log('All trial actions used');
+        showUpgradePrompt();
+      } else {
+        const percentage = (trialInfo.remainingActions / trialInfo.totalActions) * 100;
+        console.log(`${trialInfo.remainingActions} actions remaining (${percentage.toFixed(1)}%)`);
+        showActionProgress(trialInfo.remainingActions, trialInfo.totalActions);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking trial:', error);
+  }
+};
+```
+
+### React Component
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function TrialStatus() {
+  const [trialInfo, setTrialInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrialInfo = async () => {
+      try {
+        const info = await paywall.getTrialInfo();
+        setTrialInfo(info);
+      } catch (error) {
+        console.error('Failed to fetch trial info:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrialInfo();
+  }, []);
+
+  if (loading) {
+    return <div>Loading trial information...</div>;
+  }
+
+  if (trialInfo === 'no trial') {
+    return (
+      <div>
+        <p>No trial available</p>
+        <button onClick={() => paywall.open()}>
+          Get Premium Access
+        </button>
+      </div>
+    );
+  }
+
+  if ('expirationTime' in trialInfo) {
+    // Time-based trial
+    const timeRemaining = trialInfo.expirationEnd - Date.now();
+    const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+
+    return (
+      <div>
+        <h3>Trial Status</h3>
+        {trialInfo.expired ? (
+          <p>Your trial has expired</p>
+        ) : (
+          <p>Trial expires in {hoursRemaining} hours</p>
+        )}
+        <button onClick={() => paywall.open()}>
+          Upgrade Now
+        </button>
+      </div>
+    );
+  }
+
+  if ('remainingActions' in trialInfo) {
+    // Action-based trial
+    return (
+      <div>
+        <h3>Trial Actions</h3>
+        {trialInfo.expired ? (
+          <p>No trial actions remaining</p>
+        ) : (
+          <>
+            <p>{trialInfo.remainingActions} of {trialInfo.totalActions} actions remaining</p>
+            <div style={{
+              width: '100%',
+              backgroundColor: '#f0f0f0',
+              borderRadius: '4px',
+              height: '8px'
+            }}>
+              <div
+                style={{
+                  width: `${(trialInfo.remainingActions / trialInfo.totalActions) * 100}%`,
+                  backgroundColor: '#007bff',
+                  height: '100%',
+                  borderRadius: '4px'
+                }}
+              />
+            </div>
+          </>
+        )}
+        <button onClick={() => paywall.open()}>
+          Get More Actions
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+```
+
+## Error Handling
+
+```javascript
+const safeGetTrialInfo = async () => {
+  try {
+    const trialInfo = await paywall.getTrialInfo();
+    return trialInfo;
+  } catch (error) {
+    if (error.message.includes('not initialized')) {
+      console.error('Paywall not initialized yet');
+    } else if (error.message.includes('version')) {
+      console.error('Paywall version too old - upgrade to 1.0.3+');
+    } else {
+      console.error('Failed to get trial info:', error);
+    }
+
+    // Return safe default
+    return 'no trial';
+  }
+};
+```
+
+## Data Examples
+
+### Time-Based Trial
+
+```javascript
+{
+  expirationStart: 1703001600000,    // December 19, 2023 12:00:00 PM
+  expirationEnd: 1703174400000,      // December 21, 2023 12:00:00 PM
+  expirationTime: 172800000,         // 48 hours in milliseconds
+  expired: false
+}
+```
+
+### Action-Based Trial
+
+```javascript
+{
+  remainingActions: 3,               // 3 actions left
+  totalActions: 5,                   // 5 actions total
+  expired: false                     // Still has actions
+}
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Get User Data" 
+    href="/docs-v2/paywall-api/get-user"
+  />
+  <Cards.Card 
+    title="Open Paywall" 
+    href="/docs-v2/paywall-api/open"
+  />
+  <Cards.Card 
+    title="Configure Trials" 
+    href="/docs-v2/paywall/trial"
+  />
+</Cards>

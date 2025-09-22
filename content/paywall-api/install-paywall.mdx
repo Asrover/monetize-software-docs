@@ -1,0 +1,161 @@
+import { Callout, Cards, Steps, Table, Tabs, Image } from 'nextra/components';
+
+# Install Client-Side SDK
+
+Complete guide to installing and integrating paywalls into your website or Chrome extension.
+
+<Callout type="info">
+  **Before Installation**: Make sure you have [created a paywall](/docs-v2/paywall/create-paywall) and configured it according to your needs.
+</Callout>
+
+## Installation Methods
+
+Paywalls can be installed in two different environments, each with its own specific requirements and setup process:
+
+<Cards>
+  <Cards.Card 
+    title="Website / SPA / Telegram App Installation" 
+    href="#website-spa-installation"
+    icon="🌐" 
+  />
+  <Cards.Card 
+    title="Chrome Extension Installation" 
+    href="#chrome-extension-installation"
+    icon="🧩" 
+  />
+</Cards>
+
+---
+
+## Website / Telegram App / SPA Installation
+
+For websites and single-page applications, the installation process is straightforward and requires minimal setup.
+
+<Steps>
+
+### Step 1: Get Installation Script
+
+Navigate to your paywall settings and click the **Install** button to get the installation script.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create paywall](/docs/install-paywall.png)
+</div>
+
+### Step 2: Add Script to Your Website
+
+Place the paywall script as close to the beginning of your HTML page as possible. Ideally, include it within the `<head></head>` or at the beginning of the `<body></body>` tags.
+
+```html
+<script>
+// Your generated paywall script will be provided here
+// Copy the exact script from your paywall dashboard
+</script>
+```
+
+<Callout type="warning">
+  **Important**: Always use the exact script provided in your paywall dashboard. The script is unique to your paywall and contains necessary configuration.
+</Callout>
+
+### Step 3: Test Installation
+
+After adding the script, test your paywall installation:
+
+1. **Load your website** in a browser
+2. **Open browser console** (F12 → Console tab)
+3. **Check for errors** - there should be no paywall-related errors
+4. **Trigger paywall** using your configured conditions
+
+</Steps>
+
+---
+
+## Chrome Extension Installation
+
+Installing paywalls in Chrome extensions requires additional configuration for proper communication between the extension and the paywall service.
+
+<Callout type="warning">
+  **Extension Mode Required**: Make sure your paywall is configured in **Chrome Extension Mode** in the paywall settings. Website mode will not work properly in extensions.
+</Callout>
+
+<Steps>
+
+### Step 1: Download Paywall Script
+
+1. **Navigate to your paywall dashboard**
+2. **Click the Install button**
+3. **Switch to "Chrome extension" tab**
+4. **Download the script file** (e.g., `wall.1.0.0.js`)
+5. **Place the file** in the root directory of your extension (next to `manifest.json`)
+
+### Step 2: Add Script to Extension Page
+
+Add the following script to your main HTML file (usually `index.html` or `app.html`) within the `<head>` or `<body>` tags:
+
+```html
+<script src="./wall.1.0.0.js"></script>
+```
+
+### Step 3: Configure manifest.json
+
+Update your `manifest.json` file to include the necessary permissions and external connectivity.
+
+### Step 4: Configure background.js
+
+Create or update your `background.js` file with the specified code to handle communication with the paywall service.
+
+### Step 5: (Optional) Restrict to New Users Only
+
+If you want to show the paywall only to new users (those who installed the extension after paywall implementation), follow these additional steps:
+
+<Tabs items={[{ label: 'background.js Update' }, { label: 'Your Script Implementation' }]}>
+  <Tabs.Tab>
+    **Add to background.js:**
+
+    ```javascript
+    chrome.runtime.onInstalled.addListener(function (details) {
+      if (details.reason === 'install') {
+        const installDate = new Date().toISOString();
+        chrome.storage.sync.set({ installDate });
+      }
+    });
+    ```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Check in your script:**
+
+    ```javascript
+    const { installDate } = await chrome.storage.sync.get('installDate')
+
+    // Check if the user is new (installDate is set for new users)
+    if (installDate) {
+      paywall.open()
+    } else {
+      // User installed extension before paywall implementation
+      // Do not show paywall
+    }
+    ```
+
+  </Tabs.Tab>
+</Tabs>
+
+</Steps>
+
+## Next Steps
+
+After installing client-side SDK:
+
+<Cards>
+  <Cards.Card 
+    title="Open Paywall" 
+    href="/docs-v2/paywall-api/open"
+  />
+  <Cards.Card 
+    title="Get User Data" 
+    href="/docs-v2/paywall-api/get-user"
+  />
+  <Cards.Card 
+    title="Get Trial Info" 
+    href="/docs-v2/paywall-api/get-trial-info"
+  />
+</Cards>

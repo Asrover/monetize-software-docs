@@ -1,0 +1,358 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Tabs
+} from 'nextra/components';
+
+# Webhooks Overview
+
+Monetize.software can send you notifications any time an event happens in your app and monitor state changes for your subscribers.
+
+## Benefits
+
+With webhooks integrated, you can:
+
+- **Keep your backend synchronized** with real-time subscription and purchase data
+- **Set up automated workflows** that respond to subscription events
+- **Send timely communications** to subscribers about billing issues or engage with them during unsubscription
+
+## Supported Events
+
+| Event                    | Description                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `payment.completed`      | Successfully completed payment (one-time or first subscription payment) |
+| `subscription.created`   | New subscription creation                                               |
+| `subscription.updated`   | Subscription update (plan change, status change, etc.)                  |
+| `subscription.cancelled` | Subscription cancellation                                               |
+| `refund.created`         | Refund creation                                                         |
+
+## Webhook Structure
+
+### HTTP Headers
+
+Every webhook request includes these headers:
+
+```http
+Content-Type: application/json
+User-Agent: Monetize-Webhooks/1.0
+X-Monetize-Signature: sha256=<signature>
+```
+
+<Callout type="info">
+  **Signature Header:** The `X-Monetize-Signature` header is only included if you have configured a secret key for webhook verification.
+</Callout>
+
+### Payload Structure
+
+Each webhook notification has this JSON structure:
+
+```json
+{
+  "id": "evt_1234567890_abcdef123",
+  "type": "payment.completed",
+  "created_at": "2024-01-15T12:30:45.000Z",
+  "data": {
+    "price": {
+      "id": "cus_customer123",
+      "unit_amount": 2000,
+      "interval": "year"
+    },
+    "customer": {
+      "id": "cus_customer123",
+      "email": "user@example.com"
+    },
+    "user": {
+      "id": "cus_customer123",
+      "metadata": {
+        "some-custom-field": "value"
+      }
+    },
+    "paywall": {
+      "id": "123"
+    },
+    "acquiring": {
+      "id": "acq_456",
+      "provider": "stripe"
+    }
+  }
+}
+```
+
+### Common Fields
+
+| Field        | Type   | Description                                |
+| ------------ | ------ | ------------------------------------------ |
+| `id`         | string | Unique event identifier                    |
+| `type`       | string | Event type (e.g., "payment.completed")     |
+| `created_at` | string | Event creation time in ISO 8601 format     |
+| `data`       | object | Event-specific data containing information |
+
+## Event-Specific Fields
+
+### Payment Events
+
+Additional fields for payment events:
+
+```json
+"payment": {
+  "id": "pi_payment123",
+  "status": "succeeded"
+}
+```
+
+### Subscription Events
+
+Additional fields for subscription events:
+
+```json
+"subscription": {
+  "id": "sub_subscription123",
+  "status": "active",
+  "current_period_start": "2024-01-15T12:30:45.000Z",
+  "current_period_end": "2024-02-15T12:30:45.000Z"
+}
+```
+
+### Refund Events
+
+Additional fields for refund events:
+
+```json
+"refund": {
+  "id": "re_refund123",
+  "reason": "requested_by_customer",
+  "amount": 2999
+}
+```
+
+## Authentication Verification
+
+### Webhook Signature
+
+If you have configured a secret key, each webhook will contain an `X-Monetize-Signature` header with an HMAC SHA256 signature of the request body.
+
+<Callout type="warning">
+  **Security:** Always verify webhook signatures in production to ensure the request is genuinely from Monetize.software.
+</Callout>
+
+### Signature Verification Examples
+
+<Tabs items={['Node.js', 'Python', 'PHP']}>
+  <Tabs.Tab>
+    ```javascript
+    const crypto = require('crypto');
+
+    function verifyWebhookSignature(payload, signature, secret) {
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload)
+        .digest('hex');
+
+      // Remove "sha256=" prefix from header
+      signature = signature.replace('sha256=', '');
+
+      return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature)
+      );
+    }
+
+    // Usage
+    const isValid = verifyWebhookSignature(
+      req.body,
+      req.headers['x-monetize-signature'],
+      'your_webhook_secret'
+    );
+    ```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    import hmac
+    import hashlib
+
+    def verify_webhook_signature(payload, signature, secret):
+        expected_signature = hmac.new(
+            secret.encode('utf-8'),
+            payload.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        # Remove "sha256=" prefix from header
+        signature = signature.replace('sha256=', '')
+
+        return hmac.compare_digest(expected_signature, signature)
+
+    # Usage
+    is_valid = verify_webhook_signature(
+        request.body,
+        request.headers.get('X-Monetize-Signature'),
+        'your_webhook_secret'
+    )
+    ```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```php
+    function verifyWebhookSignature($payload, $signature, $secret) {
+        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+
+        // Remove "sha256=" prefix from header
+        $signature = str_replace('sha256=', '', $signature);
+
+        return hash_equals($expectedSignature, $signature);
+    }
+
+    // Usage
+    $isValid = verifyWebhookSignature(
+        file_get_contents('php://input'),
+        $_SERVER['HTTP_X_MONETIZE_SIGNATURE'],
+        'your_webhook_secret'
+    );
+    ```
+
+  </Tabs.Tab>
+</Tabs>
+
+## Webhook Processing
+
+### Endpoint Requirements
+
+- **HTTPS:** Webhooks are only sent to HTTPS URLs
+- **Response Status:** Your endpoint should return HTTP status 200-299 for successful processing
+- **Timeout:** Response timeout is 10 seconds
+- **Idempotency:** Be prepared to receive duplicate events
+
+### Processing Example
+
+```javascript
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+app.post('/webhooks/monetize', async (req, res) => {
+  try {
+    // Verify signature
+    const signature = req.headers['x-monetize-signature'];
+    if (signature && !verifyWebhookSignature(
+      JSON.stringify(req.body),
+      signature,
+      'your_secret'
+    )) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // Parse event
+    const event = req.body;
+
+    // Process event based on type
+    switch (event.type) {
+      case 'payment.completed':
+        await handlePaymentCompleted(event.data);
+        break;
+      case 'subscription.created':
+        await handleSubscriptionCreated(event.data);
+        break;
+      case 'subscription.updated':
+        await handleSubscriptionUpdated(event.data);
+        break;
+      case 'subscription.cancelled':
+        await handleSubscriptionCancelled(event.data);
+        break;
+      case 'refund.created':
+        await handleRefundCreated(event.data);
+        break;
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.status(200).json({ status: 'success' });
+
+  } catch (err) {
+    console.error(`Webhook error: ${err}`);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+async function handlePaymentCompleted(data) {
+  console.log(`Payment completed: ${data.payment.id}`);
+  // Example: Activate user access
+  await activateUserAccess(data.user.id);
+}
+
+async function handleSubscriptionCreated(data) {
+  console.log(`Subscription created: ${data.subscription.id}`);
+  // Example: Grant premium features access
+  await grantPremiumAccess(data.user.id);
+}
+```
+
+## Retry Mechanism
+
+The system automatically retries webhook delivery on failure:
+
+- **Number of attempts:** 5 attempts
+- **Intervals:** 5, 10, 20, 40, and 80 minutes
+- **Retry conditions:** HTTP status 5xx or connection timeout
+
+## Logging
+
+All webhook delivery attempts are logged, including:
+
+- **Send time** - When the webhook was sent
+- **HTTP response status** - Response code from your endpoint
+- **Response body** - First 1000 characters of response
+- **Error messages** - Any error details
+- **Attempt count** - Which attempt number this was
+
+<Callout type="info">
+  **Access Logs:** Logs are available in the control panel under Settings → Webhooks → select specific webhook.
+</Callout>
+
+## Security
+
+<Callout type="warning">
+  **Security Best Practices:** Follow these guidelines to ensure secure webhook processing.
+</Callout>
+
+### Security Guidelines
+
+1. **Always verify the signature** when using a secret key
+2. **Use HTTPS** for all webhook URLs
+3. **Don't log full webhook data** in plain text
+4. **Restrict access** to webhook endpoints
+5. **Validate data** before processing
+
+## Limitations
+
+| Limitation                   | Value      |
+| ---------------------------- | ---------- |
+| Maximum payload size         | 1 MB       |
+| Timeout                      | 10 seconds |
+| Maximum webhooks per account | 10         |
+| Log retention                | 30 days    |
+
+## Support
+
+If you encounter webhook issues, contact technical support providing:
+
+- **Webhook ID** - Identifier of the problematic webhook
+- **Event time** - When the issue occurred
+- **Expected behavior** - What should have happened
+- **Actual behavior** - What actually happened
+- **Your side logs** - Any relevant logs from your endpoint
+
+## Next Steps
+
+<Cards>
+ <Cards.Card 
+    title="Create Webhook" 
+    href="/docs-v2/webhooks/create-webhook"
+  />
+  <Cards.Card 
+    title="Webhook Events and Scenarios" 
+    href="/docs-v2/webhooks/events"
+  />
+</Cards>

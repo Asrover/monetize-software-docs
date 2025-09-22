@@ -1,0 +1,155 @@
+import {
+  Callout,
+} from 'nextra/components';
+
+# Create Custom Domain
+
+This guide will help you set up a custom domain for your paywall. The process consists of five simple steps.
+
+## Step 1: Add domain in settings
+
+1. Log into your account and go to **Settings**
+2. In the left menu, select **Custom Domains**
+3. Click the **"Add Domain"** button
+
+![Add domain](/docs/add-custom-domain.png)
+
+4. In the popup window, enter your third-level subdomain:
+   - ✅ Correct: `paywall.yoursite.com`
+   - ✅ Correct: `checkout.yoursite.com`
+   - ✅ Correct: `api.yoursite.com`
+   - ❌ Incorrect: `yoursite.com` (root domain)
+
+![Enter domain](/docs/add-custom-domain-2.png)
+
+5. Click **"Add"**
+
+After adding, the domain will appear in the list with **"Pending"** status (awaiting verification).
+
+## Step 2: Delegate subdomain via NS records
+
+Now you need to delegate your subdomain to DigitalOcean DNS by creating NS records in your primary DNS. This step is performed in your domain registrar's or hosting provider's control panel.
+
+### Creating NS records (subdomain delegation)
+
+1. Log into your domain's DNS management panel
+2. Find the DNS records management section
+3. Create three **NS** records for your subdomain (e.g., `paywall.yoursite.com`):
+
+| Parameter | Value |
+|-----------|-------|
+| **Record Type** | NS |
+| **Name/Host** | `paywall.yoursite.com` |
+| **Value/Target** | `ns1.digitalocean.com` |
+| **Value/Target** | `ns2.digitalocean.com` |
+| **Value/Target** | `ns3.digitalocean.com` |
+| **TTL** | 300 (or minimum value) |
+
+> You do not need to change nameservers for the entire root domain. Only delegate the specific subdomain you plan to use for paywalls.
+
+### Examples for popular providers
+
+- Cloudflare: Add NS records for the subdomain in DNS → Records. Cloudflare allows NS records at the subdomain level.
+- GoDaddy/Namecheap: Use Advanced DNS to add NS records for the exact subdomain (not root).
+
+### ⚠️ Important notes
+
+- Ensure you add exactly three NS records: ns1, ns2, ns3.digitalocean.com
+- Set **minimum TTL** for quicker updates
+- Some registrars may not support subdomain NS records — check your provider's documentation
+
+## Step 3: Wait for DNS propagation
+
+After creating the NS records, you need to wait for them to propagate:
+
+- **Usually:** 5-30 minutes
+- **Maximum:** up to 48 hours
+
+### Checking NS records
+
+You can verify the correct setup using online tools:
+
+1. `nslookup -type=ns pay.yoursite.com`
+2. [DNS Checker](https://dnschecker.org/) → NS lookup
+3. [What's My DNS](https://www.whatsmydns.net/) → NS lookup
+
+The correct result should show all three nameservers:
+
+```
+ns1.digitalocean.com
+ns2.digitalocean.com
+ns3.digitalocean.com
+```
+
+## Step 4: Domain verification in dashboard
+
+After NS records propagation:
+
+1. Return to **Settings → Custom Domains**
+2. Find your domain in the list
+3. Click the **"Verify"** button
+
+If everything is configured correctly, the domain status will change to **"Waiting for moderation"**. A moderator will review and set it to **"Verified"**.
+
+### Possible errors
+
+#### "NS lookup failed"
+- Check that NS records were created for the correct subdomain
+- Wait for full DNS propagation (up to 48 hours)
+- Make sure TTL is set to minimum value
+
+#### "NS records are invalid. Missing: ..."
+- Ensure all three nameservers are present: ns1, ns2, ns3.digitalocean.com
+- Re-check that you created NS (not CNAME/A) records
+
+#### "Domain already in use"
+- This domain has already been added by another user
+- Each domain can only belong to one account
+
+## Step 5: Link to paywall
+
+After the domain is set to **Verified** by moderator:
+
+1. Go to the settings of the desired paywall
+2. Open the **"Advanced Settings"** tab
+3. In the **"Custom Domain"** section, select your verified domain
+4. Click **"Save"**
+
+Now your paywall will be displayed on the custom domain!
+
+<Callout type="warning">
+  **Important:** After changing the custom domain, you need to **get a new installation script** that will include the new domain. Go to your paywall settings and copy the updated installation script to ensure it uses your custom domain.
+</Callout>
+
+## Testing functionality
+
+After setup, test the paywall functionality:
+
+1. Open your website
+2. Try to open the paywall
+3. Make sure your custom domain appears in the address bar
+4. Check that authentication and payment work correctly
+
+## Troubleshooting
+
+### Paywall doesn't open
+
+1. Check domain status (should be "Verified")
+2. Make sure the domain is linked to the paywall
+3. Clear browser cache
+4. Try opening in incognito mode
+
+### Authentication issues
+
+1. Make sure you're using a subdomain of your main site
+2. Check browser cookie settings
+
+### DNS issues
+
+1. Ensure all three NS records exist for your subdomain
+2. Verify that your registrar supports subdomain NS delegation
+3. Check that TTL is low and enough time has passed for propagation
+
+---
+
+🎉 **Congratulations!** Your custom domain is configured and ready to use. Now your users will see your domain during payment, which will increase trust and improve conversion rates.

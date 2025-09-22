@@ -1,0 +1,232 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table
+} from 'nextra/components';
+
+# Customer Portal
+
+<Callout type="warning">
+  **Server Mode Paywalls:** This documentation is for client mode paywalls only. If your paywall is configured in server mode, you'll need to use the server-side SDK to generate customer portal links. See [Server-Side Customer Portal](/docs-v2/server-side-sdk/get-customer-portal) documentation.
+</Callout>
+
+Learn how to provide users with a self-service portal where they can manage their subscriptions, update payment methods, view billing history, and control their account settings.
+
+## Overview
+
+The customer portal is a secure, hosted page that allows your subscribers to:
+
+- **Manage subscriptions** - Upgrade, downgrade, or cancel plans
+- **Update payment methods** - Change credit cards or payment details
+- **View billing history** - Access invoices and payment records
+- **Download receipts** - Get proof of payment for tax purposes
+- **Manage account details** - Update personal information
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Customer portal](/docs/customer-portal.png)
+</div>
+
+## How to Access Customer Portal
+
+### Portal URL Structure
+
+The customer portal is accessible via a direct URL with your paywall ID:
+
+```
+https://onlineapp.pro/paywall/{{PAYWALL_ID}}/customer-portal/get
+```
+
+### Finding Your Paywall ID
+
+1. **Open your paywall settings** in the dashboard
+2. **Look at the address bar** - the paywall ID appears in the URL
+3. **Example:** If the URL shows `/paywall/197/settings`, your paywall ID is `197`
+
+### Complete Example
+
+If your paywall ID is `100`, the customer portal URL will be:
+
+```
+https://onlineapp.pro/paywall/100/customer-portal/get
+```
+
+<Steps>
+
+### Step 1: Get Your Paywall ID
+
+Navigate to your paywall settings page and get the ID from the Paywall ID field:
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Paywall ID location](/docs/paywall-id-location.png)
+</div>
+
+### Step 2: Share Portal Access
+
+Provide the customer portal link to your users through:
+
+- **In-app links** - Add "Manage Subscription" buttons
+- **Email communications** - Include in subscription confirmations
+- **Support responses** - Direct users for self-service
+- **Account pages** - Embed in user dashboards
+
+### Step 3: Test Portal Access
+
+Before sharing with users:
+
+1. **Visit the portal URL** with your paywall ID
+2. **Verify it loads correctly** without 404 errors
+3. **Test subscription management** functions
+4. **Ensure payment processor settings** are configured
+
+</Steps>
+
+## Integration Examples
+
+### In Your Application
+
+Add customer portal links throughout your app:
+
+```javascript
+// React example
+const CustomerPortalButton = ({ paywallId }) => {
+  const portalUrl = `https://onlineapp.pro/paywall/${paywallId}/customer-portal/get`;
+
+  return (
+    <a href={portalUrl} target="_blank" rel="noopener">
+      Manage Subscription
+    </a>
+  );
+};
+```
+
+### In Email Templates
+
+Include portal access in automated emails:
+
+```html
+<!-- Email template example -->
+<p>Manage your subscription:</p>
+<a href="https://onlineapp.pro/paywall/{{PAYWALL_ID}}/customer-portal/get">
+  Visit Customer Portal
+</a>
+```
+
+### Support Documentation
+
+Create help articles with portal instructions:
+
+```markdown
+## How to Cancel Your Subscription
+
+1. Visit your customer portal: https://onlineapp.pro/paywall/[YOUR_ID]/customer-portal/get
+2. Click "Cancel Subscription"
+3. Follow the confirmation steps
+```
+
+## Payment Processor Requirements
+
+### Stripe Configuration
+
+For Stripe-powered paywalls, ensure the customer portal is configured:
+
+1. **Access Stripe Dashboard** - https://dashboard.stripe.com/settings/billing/portal
+2. **Configure portal settings** - Enable features you want available
+3. **Save configuration** - Portal won't work without proper setup
+
+<Callout type="warning">
+  **404 Error Fix:** If you see a 404 error when accessing the customer portal, you need to configure the customer portal settings in your Stripe dashboard: https://dashboard.stripe.com/test/settings/billing/portal
+</Callout>
+
+### Paddle Configuration
+
+For Paddle-powered paywalls:
+
+1. **Customer portal** is automatically available
+2. **No additional setup** required
+3. **Features depend** on your Paddle account tier
+
+## Available Features
+
+### Subscription Management
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Feature</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>User Action</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Plan Changes**</Table.Td>
+      <Table.Td>Upgrade or downgrade subscription tiers</Table.Td>
+      <Table.Td>Select new plan and confirm</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Cancellation**</Table.Td>
+      <Table.Td>Cancel subscription with options for immediate or end-of-period</Table.Td>
+      <Table.Td>Choose cancellation timing</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Pause Subscription**</Table.Td>
+      <Table.Td>Temporarily suspend billing (if supported)</Table.Td>
+      <Table.Td>Set pause duration</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Payment Management
+
+- **Update payment methods** - Add new cards, remove old ones
+- **Change billing address** - Update tax and billing information
+- **Set default payment** - Choose primary payment method
+- **Retry failed payments** - Resolve billing issues
+
+### Account Information
+
+- **Billing history** - View all past transactions
+- **Download invoices** - Get PDF receipts
+- **Account details** - Update contact information
+
+## Best Practices
+
+### User Experience
+
+1. **Clear navigation** - Make portal access easy to find
+2. **Contextual links** - Show portal access when relevant
+
+### Security
+
+1. **User authentication** - Portal requires user login
+2. **Session management** - Automatic logout for security
+
+## Troubleshooting
+
+<Accordion>
+  <Accordion.Item title="404 Error on Portal Access">
+    - **Cause:** Payment processor portal not configured
+    - **Solution:** Configure customer portal in Stripe/Paddle dashboard
+    - **Verification:** Test portal access after configuration
+  </Accordion.Item>
+</Accordion>
+
+## Next Steps
+
+After setting up customer portal access:
+
+<Cards>
+  <Cards.Card 
+    title="Configure Webhooks" 
+    href="/docs-v2/webhooks/overview"
+  />
+  <Cards.Card 
+    title="Monitor Analytics" 
+    href="/docs-v2/analytics/summary"
+  />
+  <Cards.Card 
+    title="Payment Processors" 
+    href="/docs-v2/payment-processor/overview"
+  />
+</Cards>

@@ -1,0 +1,117 @@
+import {
+  Callout,
+  Cards,
+  Steps
+} from 'nextra/components';
+
+# Create API Provider
+
+<Callout type="warning">
+  This feature only available when paywall is in client mode and has tokenization enabled. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+</Callout>
+
+Step-by-step guide to create and configure API providers for your tokenized paywalls.
+
+<Callout type="info">
+  Before creating an API provider, make sure you understand the [overview](/docs-v2/api-provider/overview) of how API providers work.
+</Callout>
+
+## Step-by-Step Guide
+
+<Steps>
+
+### Step 1: Access API Providers
+
+Click the **"New API Provider"** button to start creating a new provider.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create API Provider](/docs/create-api-provider.png)
+</div>
+
+### Step 2: Configure Basic Settings
+
+**Name:**
+
+- Enter a descriptive name that identifies the API provider throughout the dashboard
+- Example: "OpenAI GPT-4", "Google Translate API", "Image Processing Service"
+
+**Query Price Level:**
+
+- Choose which token type will be charged when users make requests
+- Options: Standard, Standard 2, Standard 3, Advanced, Advanced 2, Advanced 3
+- This must match the action types configured in your tokenized paywall
+
+<Callout type="warning">
+  **Token Type Mapping:** The query price level you select here determines which tokens are deducted from users' accounts. Make sure this aligns with your paywall's tokenization configuration.
+</Callout>
+
+### Step 3: Configure API Endpoint
+
+**Endpoint URL:**
+
+- Enter the complete URL of the target API endpoint
+- Example: `https://api.openai.com/v1/chat/completions`
+- Users can dynamically add pathname parameters when making requests
+
+**Request Method:**
+
+- Select the HTTP method: GET, POST, PUT, DELETE, PATCH
+- Choose based on the target API's requirements
+
+### Step 5: Configure Request Parameters
+
+**Request Headers:**
+
+- Add any required headers for the target API
+- Common examples: Authorization, Content-Type, API keys
+- Users can pass additional headers dynamically
+
+**Request Body (if needed):**
+
+- Configure default request body for POST/PUT requests
+- Can be static or include placeholders for dynamic data
+- Users can override or extend the body when making requests
+
+### Step 6: Save and Deploy
+
+1. **Click "Create"** when all configuration is complete
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Save API Provider](/docs/save-api-provider.png)
+</div>
+
+</Steps>
+
+## Troubleshooting
+
+### Common Issues
+
+**API Provider not working:**
+- Verify endpoint URL is correct and accessible
+- Check that all required headers are configured
+- Ensure request method matches API requirements
+- Verify API credentials are valid
+
+**Token deduction issues:**
+- Confirm query price level matches paywall configuration
+- Check that users have sufficient tokens
+- Verify tokenization is enabled on the paywall
+
+## Next Steps
+
+After creating your API provider:
+
+<Cards>
+  <Cards.Card 
+    title="API Provider Overview" 
+    href="/docs-v2/api-provider/overview"
+  />
+  <Cards.Card 
+    title="Request API Provider" 
+    href="/docs-v2/paywall-api/make-request"
+  />
+  <Cards.Card 
+    title="Enable Tokenization" 
+    href="/docs-v2/paywall/tokenization"
+  />
+</Cards>

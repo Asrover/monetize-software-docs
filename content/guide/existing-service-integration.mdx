@@ -1,0 +1,658 @@
+import { Steps, Cards, Callout, Tabs } from 'nextra/components';
+
+# Service-Side SDK Integration
+
+Complete guide to integrating monetize.software with your application using server-side SDK and webhooks. Perfect for adding monetization to established platforms without disrupting current user experience.
+
+<Callout type="info">
+  **Complexity:** Advanced  
+  **Perfect for:** Existing applications, CRM systems, custom platforms
+</Callout>
+
+## What We'll Build
+
+In this guide, you'll implement:
+
+- ✅ Server-side paywall integration with custom UI
+- ✅ Webhook handling for real-time payment updates
+- ✅ User synchronization between systems
+- ✅ Custom checkout flow integration
+- ✅ Subscription management in your existing interface
+
+## Setting up Server-Side Integration
+
+## Setting up Payment Infrastructure
+
+<Steps>
+
+### Step 1: [Create paywall](/docs-v2/payment-processor/create-payment-processor)
+Create Server-Mode Paywall
+
+### Step 2: [Create payment processor](/docs-v2/payment-processor/create-payment-processor)
+
+### Step 3: [Connect payment processor to paywall](/docs-v2/payment-processor/connect-payment-processor)
+
+### Step 4: Get API Credentials
+
+1. Go to **"Settings"** → **"API Keys"**
+2. Create or copy your API key
+3. Note your paywall ID from paywall settings
+4. Store securely in your environment variables:
+
+```bash
+# Environment variables
+MONETIZE_API_KEY=your_api_key_here
+MONETIZE_PAYWALL_ID=your_paywall_id_here
+MONETIZE_API_URL=https://onlineapp.pro/api/v1
+```
+
+### Step 5: Install Server SDK
+
+Choose your preferred server technology:
+
+<Tabs items={['Node.js/Express', 'Python/Django', 'PHP/Laravel', 'Ruby/Rails']}>
+  <Tabs.Tab>
+    **Node.js/Express Setup:**
+    
+    ```javascript
+    // npm install axios
+    const axios = require('axios');
+    
+    class MonetizeClient {
+      constructor(apiKey, paywallId) {
+        this.apiKey = apiKey;
+        this.paywallId = paywallId;
+        this.baseURL = 'https://onlineapp.pro/api/v1';
+      }
+      
+      async makeRequest(endpoint, options = {}) {
+        const config = {
+          baseURL: this.baseURL,
+          headers: {
+            'x-api-key': this.apiKey,
+            'Content-Type': 'application/json',
+            ...options.headers
+          },
+          ...options
+        };
+        
+        return axios(endpoint, config);
+      }
+    }
+    
+    const monetize = new MonetizeClient(
+      process.env.MONETIZE_API_KEY,
+      process.env.MONETIZE_PAYWALL_ID
+    );
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Python/Django Setup:**
+    
+    ```python
+    # pip install requests
+    import requests
+    import os
+    
+    class MonetizeClient:
+        def __init__(self, api_key, paywall_id):
+            self.api_key = api_key
+            self.paywall_id = paywall_id
+            self.base_url = 'https://onlineapp.pro/api/v1'
+        
+        def make_request(self, endpoint, method='GET', data=None):
+            headers = {
+                'x-api-key': self.api_key,
+                'Content-Type': 'application/json'
+            }
+            
+            url = f"{self.base_url}{endpoint}"
+            response = requests.request(method, url, headers=headers, json=data)
+            return response.json()
+    
+    # Initialize client
+    monetize = MonetizeClient(
+        os.environ['MONETIZE_API_KEY'],
+        os.environ['MONETIZE_PAYWALL_ID']
+    )
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **PHP/Laravel Setup:**
+    
+    ```php
+    <?php
+    // composer require guzzlehttp/guzzle
+    
+    use GuzzleHttp\Client;
+    
+    class MonetizeClient {
+        private $apiKey;
+        private $paywallId;
+        private $client;
+        
+        public function __construct($apiKey, $paywallId) {
+            $this->apiKey = $apiKey;
+            $this->paywallId = $paywallId;
+            $this->client = new Client([
+                'base_uri' => 'https://onlineapp.pro/api/v1/',
+                'headers' => [
+                    'x-api-key' => $this->apiKey,
+                    'Content-Type' => 'application/json'
+                ]
+            ]);
+        }
+        
+        public function makeRequest($endpoint, $method = 'GET', $data = null) {
+            $options = [];
+            if ($data) {
+                $options['json'] = $data;
+            }
+            
+            $response = $this->client->request($method, $endpoint, $options);
+            return json_decode($response->getBody(), true);
+        }
+    }
+    
+    $monetize = new MonetizeClient(
+        env('MONETIZE_API_KEY'),
+        env('MONETIZE_PAYWALL_ID')
+    );
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Ruby/Rails Setup:**
+    
+    ```ruby
+    # Gemfile: gem 'httparty'
+    
+    require 'httparty'
+    
+    class MonetizeClient
+      include HTTParty
+      base_uri 'https://onlineapp.pro/api/v1'
+      
+      def initialize(api_key, paywall_id)
+        @api_key = api_key
+        @paywall_id = paywall_id
+        @options = {
+          headers: {
+            'x-api-key' => @api_key,
+            'Content-Type' => 'application/json'
+          }
+        }
+      end
+      
+      def make_request(endpoint, method = :get, data = nil)
+        options = @options.dup
+        options[:body] = data.to_json if data
+        
+        self.class.send(method, endpoint, options)
+      end
+    end
+    
+    $monetize = MonetizeClient.new(
+      ENV['MONETIZE_API_KEY'],
+      ENV['MONETIZE_PAYWALL_ID']
+    )
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+</Steps>
+
+---
+
+## Building Custom Payment Flow
+
+<Steps>
+
+### Step 4: Get Available Plans
+
+Create endpoint to fetch pricing information:
+
+```javascript
+// Node.js example - routes/pricing.js
+app.get('/api/pricing', async (req, res) => {
+  try {
+    const response = await monetize.makeRequest(
+      `/paywall/${process.env.MONETIZE_PAYWALL_ID}/prices`
+    );
+    
+    // Transform data for your frontend
+    const plans = response.data.map(plan => ({
+      id: plan.id,
+      name: plan.interval,
+      price: plan.unit_amount,
+      currency: plan.currency,
+      interval: plan.interval,
+      features: plan.metadata?.features || []
+    }));
+    
+    res.json({ plans });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch pricing' });
+  }
+});
+```
+
+### Step 5: Create Custom Checkout
+
+Implement checkout creation with your custom UI:
+
+```javascript
+// Create checkout session
+app.post('/api/create-checkout', async (req, res) => {
+  const { email, priceId, planName, userMetadata } = req.body;
+  
+  // Validate user in your system
+  const user = await User.findByEmail(email);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  try {
+    const checkoutData = {
+      email: email,
+      priceId: priceId,
+      successUrl: `${req.protocol}://${req.get('host')}/subscription/success`,
+      errorUrl: `${req.protocol}://${req.get('host')}/subscription/error`,
+      shopUrl: `${req.protocol}://${req.get('host')}/pricing`,
+      userMeta: {
+        userId: user.id,
+        planName: planName,
+        source: 'custom_checkout',
+        ...userMetadata
+      }
+    };
+    
+    const response = await monetize.makeRequest(
+      `/paywall/${process.env.MONETIZE_PAYWALL_ID}/start-checkout`,
+      {
+        method: 'POST',
+        data: checkoutData
+      }
+    );
+    
+    res.json({ 
+      checkoutUrl: response.data.checkoutUrl,
+    });
+    
+  } catch (error) {
+    console.error('Checkout creation failed:', error);
+    res.status(500).json({ error: 'Failed to create checkout' });
+  }
+});
+```
+
+### Step 6: Build Custom Pricing Page
+
+Create your own pricing interface:
+
+```html
+<!-- pricing.html -->
+<div class="pricing-container">
+  <h1>Choose Your Plan</h1>
+  
+  <div class="pricing-grid" id="pricing-grid">
+    <!-- Plans will be loaded dynamically -->
+  </div>
+  
+  <!-- Custom checkout modal -->
+  <div id="checkout-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h3>Complete Your Purchase</h3>
+      <form id="checkout-form">
+        <input type="email" id="user-email" placeholder="Email" required>
+        <input type="text" id="company-name" placeholder="Company (optional)">
+        <button type="submit">Subscribe Now</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Load pricing plans
+async function loadPricing() {
+  const response = await fetch('/api/pricing');
+  const { plans } = await response.json();
+  
+  const grid = document.getElementById('pricing-grid');
+  grid.innerHTML = plans.map(plan => `
+    <div class="pricing-card ${plan.recommended ? 'recommended' : ''}">
+      <h3>${plan.name}</h3>
+      <div class="price">$${plan.price}</div>
+      <div class="interval">per ${plan.interval}</div>
+      <button onclick="selectPlan('${plan.id}', '${plan.name}')">
+        Choose Plan
+      </button>
+    </div>
+  `).join('');
+}
+
+// Handle plan selection
+function selectPlan(priceId, planName) {
+  selectedPlan = { priceId, planName };
+  document.getElementById('checkout-modal').style.display = 'block';
+}
+
+// Handle checkout form submission
+document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const email = document.getElementById('user-email').value;
+  const company = document.getElementById('company-name').value;
+  
+  try {
+    const response = await fetch('/api/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        priceId: selectedPlan.priceId,
+        planName: selectedPlan.planName,
+        userMetadata: { company: company }
+      })
+    });
+    
+    const { checkoutUrl } = await response.json();
+    
+    // Redirect to payment processor
+    window.location.href = checkoutUrl;
+    
+  } catch (error) {
+    alert('Checkout failed. Please try again.');
+  }
+});
+
+// Load pricing on page load
+loadPricing();
+</script>
+```
+
+</Steps>
+
+## Webhook Integration
+
+<Steps>
+
+### Step 7: Set up Webhook Endpoint
+
+Create webhook handler to receive payment notifications:
+
+```javascript
+// routes/webhooks.js
+const express = require('express');
+const crypto = require('crypto');
+
+app.post('/webhook/monetize', express.raw({type: 'application/json'}), (req, res) => {
+  const signature = req.headers['x-signature'];
+  const body = req.body;
+  
+  // Verify webhook signature (recommended for security)
+  if (!verifyWebhookSignature(body, signature)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  
+  const event = JSON.parse(body);
+  
+  console.log('Webhook received:', event.type);
+  
+  // Handle different event types
+  switch (event.type) {
+    case 'payment.completed':
+      handlePaymentCompleted(event.data);
+      break;
+      
+    case 'subscription.created':
+      handleSubscriptionCreated(event.data);
+      break;
+      
+    case 'subscription.updated':
+      handleSubscriptionUpdated(event.data);
+      break;
+      
+    case 'subscription.cancelled':
+      handleSubscriptionCancelled(event.data);
+      break;
+      
+    case 'refund.created':
+      handleRefundCreated(event.data);
+      break;
+      
+    default:
+      console.log('Unhandled event type:', event.type);
+  }
+  
+  res.json({ received: true });
+});
+
+// Verify webhook signature
+function verifyWebhookSignature(body, signature) {
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+    
+  return signature === expectedSignature;
+}
+```
+
+### Step 8: Handle Payment Events
+
+Implement handlers for different payment events:
+
+```javascript
+// Handle completed payment
+async function handlePaymentCompleted(data) {
+  const { payment, user, customer, price } = data;
+  
+  try {
+    // Find user in your system
+    let localUser = await User.findByEmail(customer.email);
+    
+    if (!localUser && user.id) {
+      localUser = await User.findById(user.id);
+    }
+    
+    if (!localUser) {
+      // Create new user if doesn't exist
+      localUser = await User.create({
+        email: customer.email,
+        source: 'monetize_payment',
+        metadata: user.metadata
+      });
+    }
+    
+    // Update payment/subscription status
+    if (price.interval === 'lifetime') {
+      // Handle lifetime access
+      await localUser.update({
+        lifetimeAccess: true,
+        purchaseDate: new Date(),
+        lastPaymentAmount: price.unit_amount
+      });
+    } else {
+      // Handle subscription or one-time payment
+      await localUser.update({
+        subscriptionStatus: 'active',
+        subscriptionPlan: price.interval,
+        subscriptionStartDate: new Date(),
+        lastPaymentDate: new Date(),
+        lastPaymentAmount: price.unit_amount
+      });
+    }
+    
+    // Grant access to premium features
+    await grantPremiumAccess(localUser.id);
+    
+    console.log(`Payment completed for user ${customer.email}`);
+  } catch (error) {
+    console.error('Error handling completed payment:', error);
+  }
+}
+
+// Handle subscription cancellation
+async function handleSubscriptionCancelled(data) {
+  const { subscription, user, customer } = data;
+  
+  try {
+    const localUser = await User.findByEmail(customer.email);
+    if (!localUser) return;
+    
+    // Update subscription status
+    await localUser.update({
+      subscriptionStatus: 'cancelled',
+      cancellationDate: new Date(subscription.cancelled_at),
+      cancelAtPeriodEnd: subscription.cancel_at_period_end
+    });
+    
+    // Revoke premium access (or set grace period if cancel_at_period_end is true)
+    if (!subscription.cancel_at_period_end) {
+      await revokePremiumAccess(localUser.id);
+    }
+    
+    // Send cancellation email
+    await sendCancellationEmail(customer.email);
+    
+    console.log(`Subscription cancelled for user ${customer.email}`);
+    
+  } catch (error) {
+    console.error('Error handling cancellation:', error);
+  }
+}
+
+// Handle refund created
+async function handleRefundCreated(data) {
+  const { refund, user, customer } = data;
+  
+  try {
+    const localUser = await User.findByEmail(customer.email);
+    if (!localUser) return;
+    
+    // Update refund status
+    await localUser.update({
+      refundStatus: 'processed',
+      refundDate: new Date(),
+      refundAmount: refund.amount,
+      refundReason: refund.reason
+    });
+    
+    // Revoke access if needed
+    await revokePremiumAccess(localUser.id);
+    
+    console.log(`Refund processed for user ${customer.email}`);
+    
+  } catch (error) {
+    console.error('Error handling refund:', error);
+  }
+}
+
+```
+
+</Steps>
+
+## Customer Portal Integration
+
+<Steps>
+
+### Step 10: Customer Portal Access
+
+Provide users with subscription management:
+
+```javascript
+// Generate customer portal URL
+app.post('/api/customer-portal', async (req, res) => {
+  const { userId } = req.body;
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const response = await monetize.makeRequest(
+      `/paywall/${process.env.MONETIZE_PAYWALL_ID}/customer-portal`,
+      {
+        method: 'POST',
+        data: {
+          email: user.email,
+          returnUrl: `${req.protocol}://${req.get('host')}/account/subscription`
+        }
+      }
+    );
+    
+    res.json({ portalUrl: response.data.portalUrl });
+    
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate portal URL' });
+  }
+});
+```
+
+### Step 11: Subscription Management UI
+
+Create subscription management interface in your app:
+
+```html
+<!-- account/subscription.html -->
+<div class="subscription-management">
+  <h2>Subscription Management</h2>
+  
+  <div class="subscription-info" id="subscription-info">
+    <!-- Loaded dynamically -->
+  </div>
+  
+  <div class="subscription-actions">
+    <button id="manage-subscription" class="btn btn-primary">
+      Manage Subscription
+    </button>
+    <button id="download-invoices" class="btn btn-secondary">
+      Download Invoices
+    </button>
+  </div>
+</div>
+
+<script>
+// Load subscription info
+async function loadSubscriptionInfo() {
+  const response = await fetch(`/api/user/${currentUserId}/subscription`);
+  const subscription = await response.json();
+  
+  document.getElementById('subscription-info').innerHTML = `
+    <div class="subscription-card">
+      <h3>Current Plan: ${subscription.plan || 'Free'}</h3>
+      <p>Status: <span class="status ${subscription.isActive ? 'active' : 'inactive'}">
+        ${subscription.isActive ? 'Active' : 'Inactive'}
+      </span></p>
+      ${subscription.lastPayment ? `<p>Last payment: ${new Date(subscription.lastPayment).toLocaleDateString()}</p>` : ''}
+      
+      <div class="features">
+        <h4>Available Features:</h4>
+        <ul>
+          ${subscription.premiumFeatures.map(feature => `<li>${feature}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+// Handle subscription management
+document.getElementById('manage-subscription').addEventListener('click', async () => {
+  const response = await fetch('/api/customer-portal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentUserId })
+  });
+  
+  const { portalUrl } = await response.json();
+  window.open(portalUrl, '_blank');
+});
+
+loadSubscriptionInfo();
+</script>
+```
+
+</Steps>
+
+Congratulations! You've successfully integrated monetize.software with your existing service. Your users can now enjoy premium features while maintaining a seamless experience within your existing platform.

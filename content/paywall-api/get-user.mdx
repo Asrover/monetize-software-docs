@@ -1,0 +1,472 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+
+# Get User Data
+
+<Callout type="warning">
+  This API only available when paywall is in client mode.
+</Callout>
+
+Retrieve comprehensive user information including profile, subscription status, token balances, and purchase history.
+
+## Overview
+
+The `paywall.getUser()` method provides complete user information for authenticated users, including:
+
+- **Profile information** - name, email, avatar, and creation date
+- **Subscription status** - active subscriptions and payment history
+- **Token balances** - remaining tokens for each action type (tokenized paywalls)
+- **Geographic data** - country matching and tier information
+- **Trial status** - active subscription trials
+
+<Callout type="info">
+  **Authentication Required:** This method requires user authentication. For unauthenticated users, it returns a 401 error with basic country information.
+</Callout>
+
+## API Reference
+
+### Method Signature
+
+```typescript
+paywall.getUser(): Promise<GetUserResponse>
+```
+
+### Response Types
+
+<Tabs items={['Authenticated Response', 'Unauthenticated Error', 'Interface Definitions']}>
+  <Tabs.Tab>
+    ```typescript
+    interface GetUserResponse {
+      /** User profile information */
+      user: User;
+      /** Array of user's balance information */
+      balances: Balance[];
+      /** Whether user's country matches allowed countries */
+      countryMatch: boolean;
+      /** User's country tier level */
+      tier: number;
+      /** User's country code */
+      country: string;
+      /** Array of user's purchases/subscriptions */
+      purchases: Purchase[];
+      /** Whether user has active paid subscription or lifetime payment */
+      paid: boolean;
+      /** If user has active subscription trial otherwise undefined */
+      trial?: {
+        startedAt: string;
+        expiresAt: string;
+      }
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```typescript
+    // 401 Error Response for unauthenticated users
+    {
+      error: 'Unauthorized',
+      countryMatch: boolean,
+      tier: number,
+      country: string
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```typescript
+    interface User {
+      /** Unique user identifier */
+      id: string;
+      /** User's email address */
+      email: string;
+      /** User's full name */
+      name: string;
+      /** URL to user's avatar image */
+      avatar: string;
+      /** ISO timestamp when user was created */
+      created_at: string;
+    }
+
+    interface Balance {
+      /** Type of tokens (e.g., 'standard', 'advanced') */
+      type: string;
+      /** Amount of balance remaining */
+      count: number;
+    }
+
+    interface Purchase {
+      /** ID of the purchase/subscription */
+      id: string
+      /** Current status of the purchase/subscription */
+      status: 'active' | 'paid' | 'pending' | 'unpaid' | 'canceled' |
+              'incomplete_expired' | 'past_due' | 'incomplete';
+      /** ISO timestamp when current billing period started */
+      current_period_start: string;
+      /** ISO timestamp when current billing period ends */
+      current_period_end: string;
+      /** Whether subscription will cancel at period end */
+      cancel_at_period_end: boolean;
+      /** ISO timestamp when subscription was canceled, if applicable */
+      canceled_at?: string;
+      /** ISO timestamp when subscription was created */
+      created: string;
+      unit_amount: number
+      interval: string
+      currency: string
+      /** ISO timestamp when subscription ended, if applicable */
+      ended_at?: string;
+    }
+    ```
+
+  </Tabs.Tab>
+</Tabs>
+
+## Subscription Statuses
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Status</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`active`</Table.Td>
+      <Table.Td>Subscription is in good standing and the most recent payment is successful. Safe to provision your product.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`incomplete`</Table.Td>
+      <Table.Td>A successful payment needs to be made within 23 hours to activate the subscription, or payment requires action like customer authentication.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`incomplete_expired`</Table.Td>
+      <Table.Td>Initial payment failed and no successful payment was made within 23 hours of creating the subscription.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`past_due`</Table.Td>
+      <Table.Td>Payment on the latest invoice failed or wasn't attempted. Subscription continues to create invoices.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`canceled`</Table.Td>
+      <Table.Td>Subscription has been canceled. This is a terminal state that can't be updated.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`unpaid`</Table.Td>
+      <Table.Td>Latest invoice hasn't been paid but subscription remains. You should revoke access to your product.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  **Paid Status:** If user has active subscription or lifetime payment, then `paid` is `true`.
+</Callout>
+
+## Basic Usage
+
+### Check User Authentication
+
+```javascript
+try {
+  const userInfo = await paywall.getUser();
+
+  if (userInfo.paid) {
+    console.log('User has active subscription or lifetime payment');
+    showPremiumFeatures();
+  } else {
+    console.log('User needs subscription');
+    showPaywall();
+  }
+
+} catch (error) {
+  if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+    console.log('User not authenticated');
+    showLoginPrompt();
+  } else {
+    console.error('Failed to fetch user info:', error);
+  }
+}
+```
+
+### Check Token Balances
+
+```javascript
+const checkTokenBalances = async () => {
+  try {
+    const userInfo = await paywall.getUser();
+
+    // Check standard tokens
+    const standardTokens = userInfo.balances.find(b => b.type === 'standard');
+    if (standardTokens) {
+      console.log(`User has ${standardTokens.count} standard tokens`);
+    }
+
+    // Check advanced tokens
+    const advancedTokens = userInfo.balances.find(b => b.type === 'advanced');
+    if (advancedTokens) {
+      console.log(`User has ${advancedTokens.count} advanced tokens`);
+    }
+
+  } catch (error) {
+    console.error('Failed to check balances:', error);
+  }
+};
+```
+
+## Practical Examples
+
+### Subscription Status Handler
+
+```javascript
+const handleSubscriptionStatus = async () => {
+  try {
+    const userInfo = await paywall.getUser();
+
+    // Check overall paid status
+    if (userInfo.paid) {
+      enablePremiumFeatures();
+    } else {
+      showUpgradePrompt();
+    }
+
+    // Check specific subscription status
+    const activeSubscription = userInfo.purchases.find(p => p.status === 'active');
+    if (activeSubscription) {
+      const daysUntilRenewal = Math.ceil(
+        (new Date(activeSubscription.current_period_end) - new Date()) / (1000 * 60 * 60 * 24)
+      );
+      console.log(`Subscription renews in ${daysUntilRenewal} days`);
+
+      if (activeSubscription.cancel_at_period_end) {
+        showCancellationNotice(activeSubscription.current_period_end);
+      }
+    }
+
+  } catch (error) {
+    console.error('Failed to check subscription:', error);
+  }
+};
+```
+
+### Trial Status Checker
+
+```javascript
+const checkTrialStatus = async () => {
+  try {
+    const userInfo = await paywall.getUser();
+
+    if (userInfo.trial) {
+      const trialEnd = new Date(userInfo.trial.expiresAt);
+      const now = new Date();
+      const daysRemaining = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+
+      if (daysRemaining > 0) {
+        console.log(`Trial expires in ${daysRemaining} days`);
+        showTrialBanner(daysRemaining);
+      } else {
+        console.log('Trial has expired');
+        showTrialExpiredMessage();
+      }
+    } else {
+      console.log('No active trial');
+    }
+
+  } catch (error) {
+    console.error('Failed to check trial:', error);
+  }
+};
+```
+
+### Feature Access Control
+
+```javascript
+const checkFeatureAccess = async (requiredTokenType, requiredTokenCount = 1) => {
+  try {
+    const userInfo = await paywall.getUser();
+
+    // Check if user has paid subscription
+    if (userInfo.paid) {
+      return { allowed: true, reason: 'paid_subscription' };
+    }
+
+    // Check token balance for tokenized features
+    const tokenBalance = userInfo.balances.find(b => b.type === requiredTokenType);
+    if (tokenBalance && tokenBalance.count >= requiredTokenCount) {
+      return { allowed: true, reason: 'sufficient_tokens', remaining: tokenBalance.count };
+    }
+
+    return { allowed: false, reason: 'insufficient_access' };
+
+  } catch (error) {
+    if (error.message.includes('Unauthorized')) {
+      return { allowed: false, reason: 'not_authenticated' };
+    }
+    throw error;
+  }
+};
+```
+
+### React User Profile Component
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function UserProfile() {
+  const [userInfo, setUserInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const info = await paywall.getUser();
+        setUserInfo(info);
+        setError(null);
+      } catch (err) {
+        if (err.message.includes('Unauthorized')) {
+          setError('Please sign in to view your profile');
+        } else {
+          setError('Failed to load user information');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  if (loading) {
+    return <div>Loading user information...</div>;
+  }
+
+  if (error) {
+    return (
+      <div>
+        <p>{error}</p>
+        <button onClick={() => paywall.open({ resolveEvent: 'signed-in' })}>
+          Sign In
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <img
+          src={userInfo.user.avatar}
+          alt="Avatar"
+          style={{ width: '50px', height: '50px', borderRadius: '50%' }}
+        />
+        <div>
+          <h3>{userInfo.user.name}</h3>
+          <p>{userInfo.user.email}</p>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <h4>Subscription Status</h4>
+        {userInfo.paid ? (
+          <span style={{ color: 'green' }}>✓ Active Subscription</span>
+        ) : (
+          <span style={{ color: 'orange' }}>⚠ No Active Subscription</span>
+        )}
+      </div>
+
+      {userInfo.balances.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <h4>Token Balances</h4>
+          {userInfo.balances.map(balance => (
+            <div key={balance.type}>
+              {balance.type}: {balance.count} tokens
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Error Handling
+
+```javascript
+const safeGetUser = async () => {
+  try {
+    const userInfo = await paywall.getUser();
+    return { success: true, data: userInfo };
+  } catch (error) {
+    if (error.message.includes('Unauthorized') || error.message.includes('401')) {
+      return {
+        success: false,
+        error: 'unauthorized',
+        message: 'User not authenticated'
+      };
+    } else {
+      return {
+        success: false,
+        error: 'unknown',
+        message: 'An unexpected error occurred'
+      };
+    }
+  }
+};
+```
+
+## Data Examples
+
+### Authenticated User Response
+
+```javascript
+{
+  user: {
+    id: "user_123456789",
+    email: "john.doe@example.com",
+    name: "John Doe",
+    avatar: "https://example.com/avatars/user_123456789.jpg",
+    created_at: "2024-01-15T10:30:00Z"
+  },
+  balances: [
+    { type: "standard", count: 150 },
+    { type: "advanced", count: 25 }
+  ],
+  countryMatch: true,
+  tier: 1,
+  country: "US",
+  purchases: [
+    {
+      status: "active",
+      current_period_start: "2024-02-01T00:00:00Z",
+      current_period_end: "2024-03-01T00:00:00Z",
+      cancel_at_period_end: false,
+      created: "2024-02-01T00:00:00Z"
+    }
+  ],
+  paid: true,
+  trial: {
+    startedAt: "2024-01-15T10:30:00Z",
+    expiresAt: "2024-01-22T10:30:00Z"
+  }
+}
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Request API Provider" 
+    href="/docs-v2/paywall-api/make-request"
+  />
+  <Cards.Card 
+    title="Open Paywall" 
+    href="/docs-v2/paywall-api/open"
+  />
+  <Cards.Card 
+    title="Set User Metadata" 
+    href="/docs-v2/paywall-api/set-user-metadata"
+  />
+</Cards>

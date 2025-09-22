@@ -1,0 +1,308 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+
+# Abort API Provider Request
+
+Learn how to cancel ongoing API provider requests using abort signals. This is useful for stopping long-running requests when users navigate away or want to cancel operations.
+
+<Callout type="warning">
+  This feature only available when paywall is in client mode and has tokenization enabled. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+</Callout>
+
+<Callout type="info">
+  **Prerequisites:** You must have an [API provider created](/docs-v2/api-provider/create-api-provider) before making requests that can be aborted.
+</Callout>
+
+## Overview
+
+Both `paywall.makeRequest()` and `paywall.makeStreamRequest()` support request cancellation through abort signals. This allows you to:
+
+- **Cancel long-running requests** - Stop requests that are taking too long
+- **Handle navigation** - Cancel requests when users leave the page
+- **Improve UX** - Allow users to stop operations they no longer need
+- **Prevent memory leaks** - Clean up resources from cancelled requests
+- **Save tokens** - Avoid token deduction for cancelled requests (if cancelled before processing)
+
+## Basic Usage
+
+### Adding Abort Signal
+
+Pass an abort signal as the third parameter to enable request cancellation:
+
+```javascript
+import { useRef } from 'react';
+
+const abortSignal = useRef({});
+
+const response = await paywall.makeRequest(
+  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+  {
+    method: 'POST',
+    body: JSON.stringify({
+      messages: [{ role: "user", content: "Long processing task" }]
+    })
+  },
+  abortSignal // Third parameter for abort control
+);
+```
+
+### Aborting the Request
+
+To cancel the request, call the abort method:
+
+```javascript
+const abortRequest = () => {
+  abortSignal.current?.abort();
+};
+```
+
+## Complete Examples
+
+### React Component with Abort
+
+```javascript
+import { useState, useRef } from 'react';
+
+function AbortableAPICall() {
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
+  const abortSignal = useRef({});
+
+  const makeAPICall = async () => {
+    setLoading(true);
+    setResponse('');
+
+    try {
+      const result = await paywall.makeRequest(
+        "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            messages: [
+              { role: "user", content: "Generate a long story" }
+            ]
+          })
+        },
+        abortSignal // Enable abort functionality
+      );
+
+      if (result.ok) {
+        const data = await result.json();
+        setResponse(data.choices[0].message.content);
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Request was cancelled');
+        setResponse('Request cancelled by user');
+      } else {
+        console.error('Request failed:', error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelRequest = () => {
+    abortSignal.current?.abort();
+  };
+
+  return (
+    <div>
+      <button onClick={makeAPICall} disabled={loading}>
+        {loading ? 'Processing...' : 'Start API Call'}
+      </button>
+
+      {loading && (
+        <button onClick={cancelRequest}>
+          Cancel Request
+        </button>
+      )}
+
+      {response && <div>{response}</div>}
+    </div>
+  );
+}
+```
+
+### Streaming Request with Abort
+
+```javascript
+import { useState, useRef } from 'react';
+
+function AbortableStreaming() {
+  const [answer, setAnswer] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortSignal = useRef({});
+
+  const startStream = async () => {
+    setIsStreaming(true);
+    setAnswer('');
+
+    try {
+      const requestUrl = "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100";
+
+      for await (const chunk of paywall.makeStreamRequest(
+        requestUrl,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            messages: [
+              { role: "user", content: "Write a detailed explanation" }
+            ],
+            stream: true
+          })
+        },
+        abortSignal // Enable abort for streaming
+      )) {
+        const lines = chunk
+          .split('\n')
+          .filter((line) => line.startsWith('data: '));
+
+        lines.forEach((line) => {
+          const data = line.replace('data: ', '').trim();
+
+          if (data !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices?.[0]?.delta?.content) {
+                setAnswer(prev => prev + parsed.choices[0].delta.content);
+              }
+            } catch (error) {
+              console.error('Parse error:', error);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Streaming was cancelled');
+        setAnswer(prev => prev + '\n\n[Stream cancelled by user]');
+      } else {
+        console.error('Streaming error:', error);
+      }
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const stopStream = () => {
+    abortSignal.current?.abort();
+  };
+
+  return (
+    <div>
+      <button onClick={startStream} disabled={isStreaming}>
+        {isStreaming ? 'Streaming...' : 'Start Stream'}
+      </button>
+
+      {isStreaming && (
+        <button onClick={stopStream}>
+          Stop Stream
+        </button>
+      )}
+
+      <div>{answer}</div>
+    </div>
+  );
+}
+```
+
+## Advanced Usage
+
+### Automatic Cleanup on Unmount
+
+Ensure requests are cancelled when components unmount:
+
+```javascript
+import { useEffect, useRef } from 'react';
+
+function AutoCleanupComponent() {
+  const abortSignal = useRef({});
+
+  useEffect(() => {
+    // Cleanup on component unmount
+    return () => {
+      abortSignal.current?.abort();
+    };
+  }, []);
+
+  const makeRequest = async () => {
+    try {
+      const response = await paywall.makeRequest(
+        "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+        { method: 'POST', body: JSON.stringify({ /* data */ }) },
+        abortSignal
+      );
+      // Handle response
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Request failed:', error);
+      }
+    }
+  };
+
+  return (
+    <button onClick={makeRequest}>
+      Make Request
+    </button>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Always Handle Abort Errors
+
+```javascript
+try {
+  const response = await paywall.makeRequest(url, options, abortSignal);
+} catch (error) {
+  if (error.name !== 'AbortError') {
+    // Only log non-abort errors
+    console.error('Request failed:', error);
+  }
+}
+```
+
+### 2. Clean Up on Component Unmount
+
+```javascript
+useEffect(() => {
+  return () => {
+    abortSignal.current?.abort();
+  };
+}, []);
+```
+
+### 3. Provide Clear UI Feedback
+
+```javascript
+{loading && (
+  <div>
+    <span>Processing...</span>
+    <button onClick={cancelRequest}>Cancel</button>
+  </div>
+)}
+```
+
+### 4. Handle Token Implications
+
+Note that tokens may still be deducted if the request reaches the API provider before being cancelled. The abort mainly affects the client-side handling of the response.
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Request API Provider" 
+    href="/docs-v2/paywall-api/make-request"
+  />
+  <Cards.Card 
+    title="Handle Paywall Events" 
+    href="/docs-v2/paywall-api/events"
+  />
+</Cards>

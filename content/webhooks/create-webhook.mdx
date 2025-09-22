@@ -1,0 +1,459 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Tabs
+} from 'nextra/components';
+
+# Creating a Webhook
+
+Creating a webhook allows you to receive real-time notifications about events in your application and track changes in your subscribers' status.
+
+## Quick Start
+
+<Steps>
+### Create a webhook
+
+Log into your account and navigate to **Settings → Webhooks** in the control panel.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create Webhook](/docs/create-webhook.png)
+</div>
+
+### Fill out the form and save settings
+
+Fill in the required fields of the webhook creation form:
+
+- **Name** - give a descriptive name to your webhook
+- **URL** - specify the URL of your endpoint to receive notifications
+- **Events** - select the events you want to subscribe to
+- **Status** - activate the webhook
+
+Click **"Create"** to create the webhook. The system will start sending notifications to the specified URL.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Save Webhook](/docs/webhook-window-save.png)
+</div>
+</Steps>
+
+## Available Events
+
+Select one or more events to subscribe to:
+
+| Event                   | Description                                                   |
+| ----------------------- | ------------------------------------------------------------- |
+| **Payment Completed**   | Successfully completed payment (one-time or first subscription payment) |
+| **Subscription Created** | Creation of a new subscription                               |
+| **Subscription Updated** | Subscription update (plan change, status change, etc.)      |
+| **Subscription Cancelled** | Subscription cancellation                                |
+| **Refund Created**      | Creation of a refund                                         |
+
+<Callout type="info">
+  **Event subscription:** Select only the events that are necessary for your application to avoid unnecessary load on your server.
+</Callout>
+
+## Endpoint Requirements
+
+### Mandatory Requirements
+
+- **HTTPS:** Webhooks are sent only to HTTPS URLs
+- **Response Status:** Your endpoint must return HTTP status 200-299 for successful processing
+- **Timeout:** Response timeout is 10 seconds
+- **Idempotency:** Be prepared to receive duplicate events
+
+### Endpoint Example
+
+<Tabs items={['Node.js/Express', 'Python/Flask', 'PHP']}>
+  <Tabs.Tab>
+    ```javascript
+    const express = require('express');
+    const app = express();
+
+    app.use(express.json());
+
+    app.post('/monetize/webhook', async (req, res) => {
+      try {
+        const event = req.body;
+        
+        // Process event by type
+        switch (event.type) {
+          case 'payment.completed':
+            await handlePaymentCompleted(event.data);
+            break;
+          case 'subscription.created':
+            await handleSubscriptionCreated(event.data);
+            break;
+          // ... other event types
+          default:
+            console.log(`Unhandled event type: ${event.type}`);
+        }
+
+        res.status(200).json({ status: 'success' });
+      } catch (err) {
+        console.error(`Webhook error: ${err}`);
+        res.status(500).json({ error: 'Internal error' });
+      }
+    });
+
+    async function handlePaymentCompleted(data) {
+      console.log(`Payment completed: ${data.payment.id}`);
+      // Activate user access
+      await activateUserAccess(data.user.id);
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    from flask import Flask, request, jsonify
+    import logging
+
+    app = Flask(__name__)
+
+    @app.route('/monetize/webhook', methods=['POST'])
+    def handle_webhook():
+        try:
+            event = request.get_json()
+            
+            # Process event by type
+            if event['type'] == 'payment.completed':
+                handle_payment_completed(event['data'])
+            elif event['type'] == 'subscription.created':
+                handle_subscription_created(event['data'])
+            # ... other event types
+            else:
+                print(f"Unhandled event type: {event['type']}")
+
+            return jsonify({'status': 'success'}), 200
+            
+        except Exception as e:
+            logging.error(f"Webhook error: {e}")
+            return jsonify({'error': 'Internal error'}), 500
+
+    def handle_payment_completed(data):
+        print(f"Payment completed: {data['payment']['id']}")
+        # Activate user access
+        activate_user_access(data['user']['id'])
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```php
+    <?php
+    header('Content-Type: application/json');
+
+    // Get JSON data
+    $input = file_get_contents('php://input');
+    $event = json_decode($input, true);
+
+    try {
+        // Process event by type
+        switch ($event['type']) {
+            case 'payment.completed':
+                handlePaymentCompleted($event['data']);
+                break;
+            case 'subscription.created':
+                handleSubscriptionCreated($event['data']);
+                break;
+            // ... other event types
+            default:
+                error_log("Unhandled event type: " . $event['type']);
+        }
+
+        http_response_code(200);
+        echo json_encode(['status' => 'success']);
+        
+    } catch (Exception $e) {
+        error_log("Webhook error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal error']);
+    }
+
+    function handlePaymentCompleted($data) {
+        error_log("Payment completed: " . $data['payment']['id']);
+        // Activate user access
+        activateUserAccess($data['user']['id']);
+    }
+    ?>
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Secret Key Setup
+
+### Why Secret Key is Needed
+
+The secret key is used to create an HMAC SHA256 signature, which allows you to:
+
+- **Verify authenticity** of notifications from Monetize.software
+- **Prevent attacks** with fake webhook notifications
+- **Ensure security** of your endpoint
+
+### Secret Key Generation
+
+Create a cryptographically strong secret key:
+
+<Tabs items={['Node.js', 'Python', 'OpenSSL']}>
+  <Tabs.Tab>
+    ```javascript
+    const crypto = require('crypto');
+    
+    // Generate 32-byte key
+    const secret = crypto.randomBytes(32).toString('hex');
+    console.log('Secret key:', secret);
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    import secrets
+    
+    # Generate 32-byte key
+    secret = secrets.token_hex(32)
+    print(f'Secret key: {secret}')
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    # Generate 32-byte key
+    openssl rand -hex 32
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+### Signature Verification
+
+When specifying a secret key, each request will contain the `X-Monetize-Signature` header:
+
+<Tabs items={['Node.js', 'Python', 'PHP']}>
+  <Tabs.Tab>
+    ```javascript
+    const crypto = require('crypto');
+
+    function verifyWebhookSignature(payload, signature, secret) {
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload)
+        .digest('hex');
+
+      // Remove "sha256=" prefix from header
+      signature = signature.replace('sha256=', '');
+
+      return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature)
+      );
+    }
+
+    // Usage in middleware
+    app.post('/monetize/webhook', (req, res) => {
+      const signature = req.headers['x-monetize-signature'];
+      const payload = JSON.stringify(req.body);
+      
+      if (!verifyWebhookSignature(payload, signature, YOUR_SECRET)) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+      
+      // Process webhook...
+    });
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    import hmac
+    import hashlib
+
+    def verify_webhook_signature(payload, signature, secret):
+        expected_signature = hmac.new(
+            secret.encode('utf-8'),
+            payload.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        # Remove "sha256=" prefix from header
+        signature = signature.replace('sha256=', '')
+
+        return hmac.compare_digest(expected_signature, signature)
+
+    # Usage in Flask
+    @app.route('/monetize/webhook', methods=['POST'])
+    def handle_webhook():
+        signature = request.headers.get('X-Monetize-Signature')
+        payload = request.get_data(as_text=True)
+        
+        if not verify_webhook_signature(payload, signature, YOUR_SECRET):
+            return jsonify({'error': 'Invalid signature'}), 401
+        
+        # Process webhook...
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```php
+    function verifyWebhookSignature($payload, $signature, $secret) {
+        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+
+        // Remove "sha256=" prefix from header
+        $signature = str_replace('sha256=', '', $signature);
+
+        return hash_equals($expectedSignature, $signature);
+    }
+
+    // Usage
+    $signature = $_SERVER['HTTP_X_MONETIZE_SIGNATURE'];
+    $payload = file_get_contents('php://input');
+
+    if (!verifyWebhookSignature($payload, $signature, YOUR_SECRET)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid signature']);
+        exit;
+    }
+
+    // Process webhook...
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="warning">
+  **Security:** Always verify the webhook signature in production to ensure the request is truly from Monetize.software.
+</Callout>
+
+### Testing Functionality
+
+After creating a webhook:
+
+1. **Create a test transaction** in your application
+2. **Check the logs** in the control panel (Settings → Webhooks → your webhook → View Logs)
+3. **Ensure receipt** of notifications at your endpoint
+4. **Verify correctness** of data processing
+
+## Webhook Management
+
+### Viewing Created Webhooks
+
+The webhooks table displays:
+
+- **Name** - webhook name
+- **Status** - active/inactive
+- **Events** - subscribed events
+- **Creation Date** - when the webhook was created
+- **Last Call** - time of the last successful call
+
+### Webhook Actions
+
+For each webhook, the following actions are available:
+
+- **View Logs** - history of all notification delivery attempts
+- **Edit** - modify webhook settings
+- **Delete** - complete webhook deletion
+
+### Viewing Logs
+
+Logs contain detailed information about each delivery attempt:
+
+- **Date and Time** - when the delivery attempt was made
+- **Event Type** - which event triggered the notification
+- **Paywall ID** - identifier of the associated paywall
+- **HTTP Status** - response code from your endpoint
+- **Response Body** - response content
+- **Attempt Count** - delivery attempt number
+- **Error Message** - error details for failed deliveries
+
+## Limits and Restrictions
+
+| Limitation                   | Value      |
+| ---------------------------- | ---------- |
+| Maximum payload size         | 1 MB       |
+| Timeout                      | 10 seconds |
+| Maximum webhooks per account | 10         |
+| Log retention                | 30 days    |
+| Retry delivery attempts      | 5 attempts |
+
+## Retry Delivery
+
+The system automatically retries delivery in case of failure:
+
+- **Number of attempts:** 5 attempts
+- **Intervals:** 5, 10, 20, 40, and 80 minutes
+- **Retry conditions:** HTTP status 5xx or connection timeout
+
+<Callout type="info">
+  **Attempt logging:** All delivery attempts are logged and available in the control panel.
+</Callout>
+
+## Security Recommendations
+
+### Basic Principles
+
+1. **Always verify the signature** when using a secret key
+2. **Use HTTPS** for all webhook URLs
+3. **Don't log full webhook data** in plain text
+4. **Restrict access** to webhook endpoints
+5. **Validate data** before processing
+
+### Error Handling
+
+```javascript
+app.post('/monetize/webhook', async (req, res) => {
+  try {
+    // Verify signature
+    if (!verifySignature(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Validate data structure
+    if (!isValidEvent(req.body)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    // Idempotent processing
+    const eventId = req.body.id;
+    if (await isEventProcessed(eventId)) {
+      return res.status(200).json({ status: 'already_processed' });
+    }
+
+    // Process event
+    await processEvent(req.body);
+    await markEventAsProcessed(eventId);
+
+    res.status(200).json({ status: 'success' });
+    
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue                 | Cause                        | Solution                          |
+| --------------------- | ---------------------------- | --------------------------------- |
+| HTTP 401              | Invalid signature            | Check secret key                  |
+| HTTP 404              | URL unavailable              | Check URL correctness             |
+| HTTP 500              | Error on your server         | Check your application logs       |
+| Timeout               | Slow processing              | Optimize processing time          |
+| Duplicate events      | Network issues               | Implement idempotent processing   |
+
+### Debugging
+
+1. **Check webhook logs** in the control panel
+2. **Review payload** of sent events
+3. **Check response status** of your endpoint
+4. **Ensure URL availability** through browser or curl
+5. **Check headers** of requests and responses
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Webhook Events" 
+    href="/docs-v2/webhooks/events"
+  />
+  <Cards.Card 
+    title="Webhooks Overview" 
+    href="/docs-v2/webhooks/overview"
+  />
+  <Cards.Card 
+    title="Paywall API" 
+    href="/docs-v2/paywall-api/overview"
+  />
+</Cards>

@@ -1,0 +1,342 @@
+import { Callout, Cards, Tabs } from 'nextra/components';
+import Accordion from '@/components/Accordion';
+
+# FAQ
+
+Frequently asked questions about Monetize.software platform. Find answers to common questions about integration, pricing, payment processors, and more.
+
+<Callout type="info">
+  **Can't find your question?** Contact our support team or join our [Telegram community](https://t.me/monetize_software_ru) for help.
+</Callout>
+
+## Getting Started
+
+<Accordion>
+  <Accordion.Item title="What is Monetize.software and how does it work?" defaultOpen>
+    Monetize.software is a comprehensive in-app purchase platform that helps developers monetize their applications through subscriptions and tokenized payments. The platform provides:
+    
+    - **Client-side SDK** for quick integration with ready-made UI components
+    - **Server-side SDK** for custom implementations and full control
+    - **Payment processing** through Stripe and Paddle integrations
+    - **Analytics and reporting** to track your revenue and user behavior
+    
+    You can choose between subscription models (monthly/yearly) or token-based payments for pay-per-use scenarios.
+  </Accordion.Item>
+
+  <Accordion.Item title="How quickly can I integrate Monetize.software into my app?">
+    Integration time depends on your chosen approach:
+    
+    **Client-Side SDK (Recommended for beginners):**
+    - 10-15 minutes for basic setup
+    - Ready-made UI components
+    - No custom backend required
+    
+    **Server-Side SDK (For custom solutions):**
+    - 30-60 minutes for basic integration
+    - Requires custom UI development
+    - Full control over user experience
+    
+    Both approaches include comprehensive documentation and code examples to get you started quickly.
+  </Accordion.Item>
+
+  <Accordion.Item title="Do I need coding experience to use Monetize.software?">
+    **For Client-Side SDK:** Minimal coding required. You only need to:
+    - Copy and paste a script tag
+    - Add a few JavaScript functions
+    - Basic HTML/JavaScript knowledge is sufficient
+    
+    **For Server-Side SDK:** More technical knowledge required:
+    - Backend development experience
+    - API integration skills
+    - Understanding of webhooks and payment flows
+    
+    We provide detailed guides and examples for both approaches.
+  </Accordion.Item>
+
+  <Accordion.Item title="What types of applications can use Monetize.software?">
+    Monetize.software works with various application types:
+    
+    **Web Applications:**
+    - SaaS platforms
+    - Content websites
+    - Online tools and calculators
+    - Educational platforms
+    
+    **Extensions:**
+    - Chrome extensions
+    - Browser add-ons
+    
+    **Mobile Apps:**
+    - Using server-side SDK
+    - React Native applications
+    
+    **Desktop Applications:**
+    - Electron apps
+    - Web-based desktop software
+  </Accordion.Item>
+</Accordion>
+
+## Payment Processing
+
+<Accordion>
+  <Accordion.Item title="Which payment processors are supported?">
+    Currently, Monetize.software supports two major payment processors:
+    
+    **Stripe:**
+    - Global coverage (190+ countries)
+    - Low transaction fees (2.9% + 30¢)
+    - Extensive card support
+    - Strong fraud protection
+    - Recommended for most businesses
+    
+    **Paddle:**
+    - Merchant of record service
+    - Handles tax compliance automatically
+    - Good for digital products
+    - Suitable for global sales
+    
+    You can connect multiple payment processors and use them for different regions or products.
+  </Accordion.Item>
+
+  <Accordion.Item title="Can I offer trials and promotional pricing?">
+    Yes! Monetize.software supports various promotional strategies:
+    
+    **Free Trials:**
+    - Time-based trials (7, 14, 30 days)
+    - Usage-based trials (number of actions)
+    - Anonymous trials (no signup required)
+    
+    **Promotional Pricing:**
+    - Discount coupons
+    - Limited-time offers
+    - First-month discounts
+    - Lifetime deals
+    
+    **Token Bonuses:**
+    - Welcome tokens for new users
+    - Referral bonuses
+    - Seasonal promotions
+    
+    Configure these options in your paywall settings dashboard.
+  </Accordion.Item>
+</Accordion>
+
+## Technical Integration
+
+<Accordion>
+  <Accordion.Item title="What's the difference between Client-Side and Server-Side SDK?">
+    **Client-Side SDK:**
+    
+    ✅ **Pros:**
+    - Quick 10-minute setup
+    - Ready-made UI components
+    - Built-in user authentication
+    - Automatic state management
+    - No backend development required
+    
+    ❌ **Cons:**
+    - Limited customization options
+    - Dependent on our UI design
+    - Less control over user flow
+    
+    **Server-Side SDK:**
+    
+    ✅ **Pros:**
+    - Full control over user experience
+    - Custom interface design
+    - Advanced business logic
+    - Better security control
+    - Integration with existing systems
+    
+    ❌ **Cons:**
+    - Requires more development time
+    - Need to build authentication
+    - More complex implementation
+    - Backend development required
+  </Accordion.Item>
+
+  <Accordion.Item title="How do I handle user authentication?">
+    **Client-Side SDK:**
+    - Authentication is handled automatically
+    - Users sign in through our secure modal
+    - Social login options or anonymous sign-in
+    - Session management included
+    
+    **Server-Side SDK:**
+    - You handle authentication in your system
+    - Pass user email to create checkout sessions
+    - Receive user data through webhooks
+    - Integrate with your existing user system
+    
+    **Security:**
+    - All authentication uses industry-standard encryption
+    - OAuth 2.0 for social logins
+    - PCI DSS compliant payment processing
+    - GDPR compliant data handling
+  </Accordion.Item>
+
+  <Accordion.Item title="How do webhooks work and why do I need them?">
+    Webhooks are HTTP callbacks that notify your server about payment events in real-time:
+    
+    **Key Events:**
+    - `payment.completed` - Successful payment
+    - `subscription.created` - New subscription
+    - `subscription.cancelled` - Subscription cancelled
+    - `refund.created` - Refund processed
+    - `trial.started` - Trial period began
+    
+    **Why Use Webhooks:**
+    - Instant notification of payment status
+    - Reliable even if user closes browser
+    - Synchronize your database with payment data
+    - Automate user access management
+    - Handle edge cases and failures
+  </Accordion.Item>
+
+  <Accordion.Item title="Can I customize the paywall appearance?">
+    **Client-Side SDK Customization:**
+    - Custom colors and branding
+    - Custom CSS injection
+    - Mobile-responsive design
+    
+    **Server-Side SDK:**
+    - Complete control over UI/UX
+    - Build your own checkout flow
+    - Custom pricing pages
+    - Integration with your design system
+  </Accordion.Item>
+</Accordion>
+
+## Pricing and Business Models
+
+<Accordion>
+  <Accordion.Item title="How do I set up different prices for different countries?">
+    Monetize.software supports **locale** pricing:
+    
+    **Benefits:**
+    - Increase conversion rates globally
+    - Fair pricing for all users
+    - Maximize revenue potential
+    - Reduce payment failures
+  </Accordion.Item>
+
+  <Accordion.Item title="Can I offer refunds and how do they work?">
+    **Refund Policy:**
+    - You control your refund policy
+    - Process refunds through payment processor
+    - Automatic access revocation
+    - Partial refund support
+    
+    **Refund Process:**
+    1. Customer requests refund
+    2. You approve in Stripe/Paddle dashboard
+    3. Webhook notifies your system
+    4. User access automatically removed
+    5. Refund processed by payment processor
+    
+    **Best Practices:**
+    - Clearly state refund policy
+    - Offer trial periods to reduce refunds
+    - Provide excellent customer support
+    - Use partial refunds for usage-based services
+  </Accordion.Item>
+</Accordion>
+
+## Analytics and Reporting
+
+<Accordion>
+  <Accordion.Item title="What analytics and reports are available?">
+    **Revenue Analytics:**
+    - Monthly recurring revenue (MRR)
+    - Annual recurring revenue (ARR)
+    - Revenue growth trends
+    - Conversion funnel analysis
+    
+    **User Metrics:**
+    - Active subscribers
+    - Churn rate analysis
+    - Customer lifetime value (LTV)
+    - Trial conversion rates
+    
+    **Payment Analytics:**
+    - Payment success rates
+    - Failed payment analysis
+    - Geographic revenue breakdown
+    - Popular pricing plans
+    
+    **Real-Time Dashboard:**
+    - Live transaction monitoring
+    - Today's revenue and signups
+    - Active trial users
+    - Payment processor performance
+    
+    **Export Options:**
+    - CSV data export
+    - Custom date ranges
+    - Automated email reports
+  </Accordion.Item>
+
+  <Accordion.Item title="How can I track user behavior and optimize conversions?">
+    **Conversion Tracking:**
+    - Paywall open rates
+    - Payment completion rates
+    - Trial-to-paid conversion
+    - Geographic conversion differences
+    
+    **User Journey Analysis:**
+    - Time from signup to payment
+    - Most effective marketing channels
+    - Feature usage correlation with payments
+    - Churn prediction indicators
+    
+    **Optimization Tips:**
+    - Offer appropriate trial periods
+    - Use geographic pricing
+    - Optimize paywall timing
+    - Provide clear value propositions
+  </Accordion.Item>
+</Accordion>
+
+## Support and Resources
+
+<Accordion>
+  <Accordion.Item title="Where can I get help and support?">
+    **Official Support Channels:**
+    
+    **Documentation:**
+    - Comprehensive guides and API references
+    - Code examples and tutorials
+    - Integration walkthroughs
+    - Best practices and tips
+    
+    **Community Support:**
+    - [Telegram Community](https://t.me/monetize_software_ru) - Active community chat
+    
+    **Direct Support:**
+    - Email support (support@monetize.software)
+    - Priority support for paid plans
+    - Technical consultation available
+    
+    **Response Times:**
+    - Community support: Usually within a few hours
+    - Email support: 24-48 hours
+    - Priority support: Within 4 hours
+    - Critical issues: Immediate response
+    
+    **Self-Service Resources:**
+    - FAQ section (this page)
+    - Integration templates
+  </Accordion.Item>
+</Accordion>
+
+
+<Callout type="info">
+  **Still have questions?** 
+  
+  - Check our [complete documentation](/docs-v2) for detailed guides
+  - Join our [Telegram community](https://t.me/monetize_software_ru) for quick help
+  - Contact support at support@monetize.software
+  - Schedule a demo call for complex integrations
+</Callout>
+
+

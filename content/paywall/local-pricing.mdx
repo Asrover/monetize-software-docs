@@ -1,0 +1,103 @@
+import { Callout, Cards, Steps, Table, Tabs, Image } from 'nextra/components';
+
+# Local Pricing
+
+Local pricing allows you to set different prices for different countries and currencies, helping **increase conversion rates** by adapting prices to the purchasing power of various regions.
+
+<Callout type="info">
+  Local pricing is especially effective for global products, allowing you to optimize prices for the economic conditions of each country.
+</Callout>
+
+## How It Works
+
+The local pricing system automatically detects the user’s country and shows the corresponding prices in their local currency. If no local price is configured for the user’s country, the base price will be used.
+
+### Key Features
+
+- **Automatic country detection** based on IP address  
+- **Support for 50+ currencies**
+- **Smart rounding** depending on the currency type  
+- **Automatic calculation** based on exchange rates and the Big Mac Index  
+- **Flexible customization** for each currency separately  
+
+## Setting Up Local Pricing
+
+<Steps>
+
+### Step 1: Enable the Feature
+
+1. Go to your paywall settings  
+2. In the **“Pricing”** section, find the option **“Use local pricing for different countries”**  
+3. Check the box to enable  
+4. Then Click the **“Configure Local Pricing”** button  
+
+![Local pricing toggle](/docs/local-pricing-toggle.png)
+
+### Step 2: Add Currencies
+
+2. In the editor, click “Add Currency”  
+3. Select a currency from the supported list  
+
+![Add currency](/docs/add-currency.png)
+
+### Step 3: Set Prices
+
+For each added currency, you can:  
+
+- **Use automatic calculation** – the system will suggest prices based on exchange rates and economic indicators  
+- **Set prices manually** – enter your desired prices for each plan  
+- **Copy prices** from another currency and adjust them  
+
+</Steps>
+
+## Automatic Price Calculation
+
+The system suggests intelligent local price calculations based on:
+
+### 1. Exchange Rates  
+Current exchange rates are used as the base for calculation.  
+
+### 2. Big Mac Index  
+Purchasing power across countries is considered through the Big Mac Index, allowing more accurate adaptation to local economic conditions.  
+
+## Working with Different Plan Types
+
+### Monthly Plans  
+For monthly plans, prices are set directly in the specified currency.  
+
+### Annual Plans  
+For annual plans, the interface shows the **equivalent monthly cost**, but the full annual amount is charged. This makes pricing clearer for users.  
+
+<Callout type="info">
+  For example, if the annual plan costs $120, the interface will display “$10/month when billed annually.”
+</Callout>
+
+## User Display
+
+### Automatic Detection  
+The system automatically detects the user’s country via IP and shows the corresponding local price.  
+
+### Fallback Mechanism  
+If no local price is configured for the user’s country, the system falls back to base prices in USD or another primary currency.  
+
+## Best Practices
+
+### 1. Start with Key Markets  
+Don’t try to configure every country at once. Start with:  
+- Countries with the most traffic  
+- Regions with low conversion  
+- Key markets for your product  
+
+### 2. Consider Local Specifics  
+- Research competitors in each region  
+- Account for local payment methods  
+- Adapt to local pricing standards  
+
+### 3. Update Regularly  
+- Monitor exchange rate changes  
+- Update prices during major economic shifts  
+- Adapt to changes in purchasing power  
+
+<Callout>
+  Properly configured local pricing can increase conversion rates by 15–40% depending on the region and product type.
+</Callout>

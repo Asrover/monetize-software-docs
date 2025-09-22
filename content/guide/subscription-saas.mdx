@@ -1,0 +1,138 @@
+import { Steps, Cards, Callout, Tabs } from 'nextra/components';
+
+# Creating SaaS Subscription
+
+Complete guide to setting up a subscription model for your SaaS product using monetize.software. From initial setup to full integration with automatic renewals.
+
+<Callout type="info">
+  **Complexity:** Beginner level  
+  **Perfect for:** SaaS products, web applications, online services
+</Callout>
+
+## What We'll Build
+
+In this guide, you'll set up:
+
+- ✅ Paywall with subscription plans
+- ✅ Stripe or Paddle integration for payment processing
+- ✅ Automatic subscription renewals
+- ✅ Subscription status checking in your app
+- ✅ Cancellation and renewal handling
+
+## Setting up Payment Infrastructure
+
+<Steps>
+
+### Step 1: [Create paywall](/docs-v2/payment-processor/create-payment-processor)
+
+### Step 2: [Create payment processor](/docs-v2/payment-processor/create-payment-processor)
+
+### Step 3: [Connect payment processor to paywall](/docs-v2/payment-processor/connect-payment-processor)
+
+### Step 4: [Install client-side SDK](/docs-v2/paywall-api/install-paywall)
+
+</Steps>
+
+## Integrating with Your Application
+
+<Steps>
+
+### Step 1: Basic Subscription Check
+
+Add subscription status checking on app load:
+
+```javascript
+// Check subscription on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const userInfo = await paywall.getUser();
+        
+        if (userInfo.paid) {
+            // User has active subscription
+            enablePremiumFeatures();
+        } else {
+            // User not subscribed
+            showLimitedFeatures();
+        }
+    } catch (error) {
+        // User not authenticated
+        showGuestMode();
+    }
+});
+```
+
+### Step 2: Implement Feature Limitations
+
+Create limitation system for non-subscribers:
+
+```javascript
+// Function that requires premium access or allows access in specific cases
+async function performAdvancedExport() {
+    try {
+        // Try to open paywall and wait for successful purchase
+        await paywall.open({ resolveEvent: 'success-purchase' });
+        
+        // User successfully purchased - allow advanced export
+        executeAdvancedExport();
+        
+    } catch (error) {
+        // Paywall was not opened or user didn't purchase
+        // Check the specific reason to decide whether to allow access
+        switch (error.visibility_status_reason) {
+            case 'closed-by-user':
+                // User manually closed paywall without payment
+                // Don't show the feature - user explicitly declined
+                showMessage('Upgrade required for advanced export');
+                break;
+                
+            case 'openings-trial':
+            case 'time-trial':
+                // User is still in trial period
+                // Allow access to premium features during trial
+                executeAdvancedExport();
+                showMessage('Trial feature - upgrade for unlimited access');
+                break;
+                
+            case 'country-not-match':
+                // User's location doesn't match paywall targeting settings
+                // For example: paywall configured only for tier-1 countries
+                // but user is from tier-2 or tier-3 country
+                executeAdvancedExport();
+                showMessage('Feature available in your region');
+                break;
+                
+            case 'visibility-turned-off':
+                // Paywall visibility is disabled in settings
+                // Allow free access when paywall is intentionally disabled
+                executeAdvancedExport();
+                break;
+                
+            case 'active-payment-found':
+                // User already has an active subscription or lifetime purchase
+                // Full access granted
+                executeAdvancedExport();
+                break;
+                
+            default:
+                // Unknown reason - show upgrade prompt
+                showMessage('Please upgrade to access this feature');
+        }
+    }
+}
+
+```
+
+</Steps>
+
+## Further Development
+
+After successfully launching basic subscription model, consider:
+
+<Cards>
+  <Cards.Card 
+    title="Paywall Offers" 
+    href="/docs-v2/offers/overview"
+  />
+</Cards>
+
+Congratulations! You've created a complete subscription model for your SaaS product. Now you can monetize your application and scale your business.

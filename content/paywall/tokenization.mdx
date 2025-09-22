@@ -1,0 +1,291 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs,
+} from 'nextra/components';
+
+# Paywall Tokenization
+
+<Callout type="warning">
+  This feature only available when paywall is in client mode.
+</Callout>
+
+Learn how to implement tokenized paywalls that limit user actions based on purchased quotas.
+
+<Callout>
+  **What is tokenization?** Tokenization allows you to create subscription plans that include specific token allocations for different actions. Users consume tokens when performing actions, and their token quota is replenished monthly when their subscription renews. This is ideal for API-based services, AI applications, and metered usage business models.
+</Callout>
+
+<Accordion>
+  <Accordion.Item title="How Tokenization Works">
+   ```mermaid
+        graph TD
+            A0["User registers in paywall"] --> A1{"Trial tokens configured?"}
+            A1 -->|Yes| A2["System allocates trial tokens to user balance"]
+            A1 -->|No| A3["User purchases subscription"]
+            A2 --> A3["User purchases subscription"]
+            A3 --> B["System allocates subscription tokens to user balance"]
+            B --> C["User makes API call through API Provider"]
+            C --> D["API Provider checks user authorization"]
+            D --> E{"User authorized?"}
+            E -->|No| F["API Provider returns<br/>403 Unauthorized error"]
+            F --> G["Call paywall.open() to authorize user and retry request"]
+            G --> C
+            
+            E -->|Yes| H["API Provider checks token balance"]
+            H --> I{"Tokens available?"}
+            I -->|Yes| J["API Provider calls target endpoint"]
+            J --> K["Target API responds successfully"]
+            K --> L["Deduct tokens based on API provider action type"]
+            L --> M["Return response to user"]
+
+            I -->|No| N["API Provider returns<br/>Insufficient tokens error"]
+            N --> O["User must purchase more tokens<br/>via paywall"]
+            O --> P["Paywall processes payment"]
+            P --> B
+
+            B --> Q["Monthly subscription renewal"]
+            Q --> R["System automatically replenishes user token balance"]
+            R --> C
+
+            style A0 fill:#e3f2fd
+            style A2 fill:#f1f8e9
+            style A3 fill:#e1f5fe
+            style B fill:#f3e5f5
+            style L fill:#fff3e0
+            style F fill:#ffcdd2
+            style N fill:#ffebee
+            style R fill:#e8f5e8
+        ```
+
+        <Callout type="info">
+        **Token Types Matter:** Different action types consume different amounts of tokens. Configure your action types to reflect the actual cost of operations - expensive AI calls should consume more tokens than simple data retrieval.
+        </Callout>
+
+  </Accordion.Item>
+</Accordion>
+
+## Overview
+
+Tokenized paywalls provide:
+
+- **Subscription with token quotas** - Users pay for subscription plans that include specific token allocations
+- **Monthly token renewal** - Token quotas are replenished when subscription renews each month
+- **No custom auth server needed** - Tokens are stored and managed on our servers, eliminating the need to build your own authorization infrastructure for third-party API providers
+- **Trial systems** - Offer free trial quotas to new users before subscription
+- **Multiple action types** - Different token costs for different types of operations
+- **Automatic enforcement** - Built-in quota tracking and blocking when tokens are depleted
+
+## Tokenization vs Regular Paywalls
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Feature</Table.Th>
+      <Table.Th>Regular Paywall</Table.Th>
+      <Table.Th>Tokenized Paywall</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Access Model**</Table.Td>
+      <Table.Td>Unlimited access within subscription</Table.Td>
+      <Table.Td>Token-limited access within subscription</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Billing**</Table.Td>
+      <Table.Td>Subscription for unlimited usage</Table.Td>
+      <Table.Td>Subscription with included token quotas</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Token Management**</Table.Td>
+      <Table.Td>No tokens</Table.Td>
+      <Table.Td>Monthly token allocation with subscription renewal</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**User Experience**</Table.Td>
+      <Table.Td>Pay subscription, unlimited access</Table.Td>
+      <Table.Td>Pay subscription, use allocated tokens</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Best For**</Table.Td>
+      <Table.Td>Content, features, unlimited usage</Table.Td>
+      <Table.Td>APIs, AI services, metered usage</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Architecture Benefits
+
+### Serverless Authorization
+
+One of the key advantages of tokenized paywalls is that you don't need to build your own authorization server:
+
+- **Centralized token management** - All user tokens are stored and managed on our platform
+- **Automatic token passing** - When your users make API calls through API providers, tokens are automatically passed to the target endpoints
+- **No infrastructure overhead** - Skip building authentication, billing, and quota management systems
+- **Ready-to-use integration** - Simply configure API providers and start using existing third-party services
+
+**Traditional approach (requires custom server):**
+
+```
+User → Your Auth Server → Check billing → Forward to API → Return response
+```
+
+**Tokenized paywall approach (no server needed):**
+
+```
+User → API Provider (with tokens) → Target API → Return response
+```
+
+<Callout type="info">
+  **Perfect for third-party APIs:** If you want to monetize access to existing APIs (OpenAI, external services, etc.), you can do so without building any backend infrastructure for authentication or billing.
+</Callout>
+
+## How to enable tokenization?
+
+<Steps>
+
+### Step 1: Enable Tokenization
+
+When creating or editing a paywall, choose the tokenization option:
+
+1. **Navigate to paywall settings**
+2. **Select paywall type: "With tokenization"**
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Paywall enable tokenization](/docs/paywall-enable-tokenization.png)
+</div>
+
+<Callout type="info">
+  **Prerequisites:** After enabling tokenization, ensure you have [API providers configured](/docs-v2/api-provider/create-api-provider) for the endpoints you want to tokenize.
+</Callout>
+
+### Step 2: Configure Tokenized Actions
+
+Define what actions users can perform and their limits:
+
+#### Action Configuration
+
+For each tokenized action, specify:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Field</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Example</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Count**</Table.Td>
+      <Table.Td>Number of queries allowed per month</Table.Td>
+      <Table.Td>100, 1000, 10000</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Type**</Table.Td>
+      <Table.Td>Action category/tier</Table.Td>
+      <Table.Td>Standard, Advanced</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Name**</Table.Td>
+      <Table.Td>Display name for the action</Table.Td>
+      <Table.Td>"Text Generation", "Image Analysis"</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Description**</Table.Td>
+      <Table.Td>Optional description of the action</Table.Td>
+      <Table.Td>"Generate AI text responses"</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Trial Queries**</Table.Td>
+      <Table.Td>Free trial quota for new users</Table.Td>
+      <Table.Td>0, 5, 10, 50</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+#### Why Use Different Action Types?
+
+Action types allow you to allocate different token quantities based on the cost and complexity of your API endpoints. This enables you to:
+
+- **Differentiate API costs** - Expensive AI models consume more tokens than simple API calls
+- **Create balanced plans** - Offer more tokens for cheap operations, fewer for expensive ones
+
+**Example Token Allocation:**
+
+- Pro API calls: 200 tokens (expensive AI processing)
+- Standard API calls: 1000 tokens (basic data processing)
+- Basic operations: 5000 tokens (simple requests)
+
+#### Available Action Types
+
+<Tabs items={['Standard Tiers', 'Advanced Tiers']}>
+  <Tabs.Tab>
+    **Standard Action Types (Lower Cost Operations):**
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Advanced Action Types (Higher Cost Operations):**
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+  **Action Type Mapping:** When creating an API provider, you must specify which action type it uses (Standard, Advanced, etc.). This determines which type of tokens will be deducted when users call that specific API provider. For example, if an API provider is configured as "Advanced" type, it will consume tokens from the user's "Advanced" token allocation.
+</Callout>
+
+### Step 3: Add Multiple Actions
+
+You can configure up to 5 different tokenized actions:
+
+1. **Click "Add Query"** to create additional action types
+2. **Configure each action** with different quotas
+3. **Remove actions** using the "Remove Query" button (minimum 1 required)
+
+<Callout type="warning">
+  **Limit:** You can have a maximum of 5 tokenized actions per paywall. Plan your action types carefully to cover all your use cases.
+</Callout>
+
+</Steps>
+
+## Implementation Requirements
+
+### Token and Subscription Management
+
+The system automatically:
+
+- **Tracks token consumption** across all tokenized actions
+- **Enforces limits** when token quotas are exhausted
+- **Replenishes tokens** monthly when subscription renews
+- **Handles token depletion** by blocking additional requests until renewal
+- **Manages subscription billing** with included token allocations
+- **Centralized token storage** - All tokens are stored on our servers and passed to API providers during calls, removing the need for custom authorization infrastructure
+
+## Troubleshooting
+
+<Accordion>
+  <Accordion.Item title="Tokenization option not available">
+    **Possible causes:**
+    - Paywall is in server mode (tokenization only works in client mode)
+    - No API providers configured
+    
+    **Solution:**
+    - Switch to client mode
+    - Configure at least one API provider
+    - Ensure API providers are properly connected
+  </Accordion.Item>
+</Accordion>
+
+## Next Steps
+
+After configuring tokenization:
+
+<Cards>
+  <Cards.Card 
+    title="Create API Provider" 
+    href="/docs-v2/api-provider/create-api-provider"
+  />
+  <Cards.Card title="Install Client-side SDK" href="/docs-v2/paywall-api/install-paywall" />
+</Cards>

@@ -1,0 +1,279 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Tabs
+} from 'nextra/components';
+
+# Withdraw Tokens
+
+Programmatically withdraw tokens from a user's balance for specific paywall operations.
+
+<Callout type="info">
+  **Tokenized Paywalls Only:** This endpoint only works with tokenized paywalls. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+</Callout>
+
+<Callout type="warning">
+  **Owner Authorization Required:** The API key owner must be the creator of the paywall for which tokens are being withdrawn.
+</Callout>
+
+## Overview
+
+The Withdraw Tokens API endpoint allows you to programmatically deduct tokens from a user's balance. This is useful for:
+
+- **Custom token consumption** - Implement your own token-based features
+- **Manual adjustments** - Adjust user balances for special cases
+
+## API Reference
+
+### Endpoint
+
+```
+POST https://onlineapp.pro/api/v1/withdraw-tokens
+```
+
+### Authentication
+
+Authenticate your requests by including your API key in the `X-Api-Key` header.
+
+```http
+X-Api-Key: your-api-key
+```
+
+<Steps>
+### Get your API key
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![API Key Location](/docs/create-api-key.png)
+</div>
+
+</Steps>
+
+### Request Body
+
+```json
+{
+  "paywall_id": "123",
+  "user_id": "user-uuid",
+  "tokens": 5,
+  "token_type": "standard"
+}
+```
+
+### Request Parameters
+
+| Parameter    | Type   | Required | Description                                      |
+| ------------ | ------ | -------- | ------------------------------------------------ |
+| `paywall_id` | string | Yes      | ID of the paywall                                |
+| `user_id`    | string | Yes      | ID of the user whose tokens will be withdrawn    |
+| `tokens`     | number | Yes      | Number of tokens to withdraw (must be > 0)       |
+| `token_type` | string | No       | Type of tokens to withdraw (default: "standard") |
+
+### Success Response
+
+**Status:** 200 OK
+
+```json
+{
+  "success": true,
+  "remaining": 45
+}
+```
+
+| Field       | Type    | Description                                                  |
+| ----------- | ------- | ------------------------------------------------------------ |
+| `success`   | boolean | Indicates successful token withdrawal                        |
+| `remaining` | number  | Number of tokens of the specified type left after withdrawal |
+
+## Basic Usage
+
+### Simple Token Withdrawal
+
+```javascript
+const withdrawTokens = async (paywallId, userId, tokensToWithdraw, tokenType = 'standard') => {
+  try {
+    const response = await fetch('https://onlineapp.pro/api/v1/withdraw-tokens', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': 'your-api-key'
+      },
+      body: JSON.stringify({
+        paywall_id: paywallId,
+        user_id: userId,
+        tokens: tokensToWithdraw,
+        token_type: tokenType
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || `HTTP ${response.status}`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Failed to withdraw tokens:', error);
+    throw error;
+  }
+};
+
+// Usage
+const result = await withdrawTokens('123', 'user-uuid-123', 5, 'standard');
+console.log(`Withdrawal successful. Remaining tokens: ${result.remaining}`);
+```
+
+## Error Handling
+
+### Error Responses
+
+<Tabs items={['Authentication Errors', 'Authorization Errors', 'Validation Errors', 'Not Found Errors']}>
+  <Tabs.Tab>
+    **Missing API Key (401)**
+    ```json
+    {"error": "API key is required"}
+    ```
+
+    **Invalid API Key (401)**
+    ```json
+    {"error": "Invalid API key"}
+    ```
+
+    **Inactive API Key (403)**
+    ```json
+    {"error": "API key is inactive"}
+    ```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Not the Owner (403)**
+    ```json
+    {"error": "Unauthorized. You are not the owner of this paywall"}
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Missing Parameters (400)**
+    ```json
+    {"error": "User ID is required"}
+    ```
+
+    **Insufficient Tokens (400)**
+    ```json
+    {
+      "error": "Insufficient tokens",
+      "available": 3,
+      "requested": 5
+    }
+    ```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Paywall Not Found (404)**
+    ```json
+    {"error": "Paywall not found"}
+    ```
+
+    **User Balance Not Found (404)**
+    ```json
+    {"error": "No balance found for this user and paywall"}
+    ```
+
+  </Tabs.Tab>
+</Tabs>
+
+### Comprehensive Error Handler
+
+```javascript
+const handleWithdrawalError = (error, response) => {
+  switch (response?.status) {
+    case 400:
+      if (error.includes('Insufficient tokens')) {
+        return {
+          type: 'insufficient_balance',
+          message: 'Not enough tokens available for withdrawal',
+          userMessage: 'Insufficient token balance'
+        };
+      }
+      return {
+        type: 'validation_error',
+        message: error,
+        userMessage: 'Please check your input and try again'
+      };
+
+    case 401:
+      return {
+        type: 'authentication_error',
+        message: error,
+        userMessage: 'Authentication failed. Please check your API key'
+      };
+
+    case 403:
+      return {
+        type: 'authorization_error',
+        message: error,
+        userMessage: 'You do not have permission to perform this action'
+      };
+
+    case 404:
+      return {
+        type: 'not_found_error',
+        message: error,
+        userMessage: 'Paywall or user not found'
+      };
+
+    default:
+      return {
+        type: 'unknown_error',
+        message: error,
+        userMessage: 'An unexpected error occurred. Please try again'
+      };
+  }
+};
+
+const safeWithdrawTokens = async (paywallId, userId, tokens, tokenType) => {
+  try {
+    const result = await withdrawTokens(paywallId, userId, tokens, tokenType);
+    return { success: true, data: result };
+  } catch (error) {
+    const errorInfo = handleWithdrawalError(error.message, error.response);
+    console.error('Token withdrawal error:', errorInfo);
+
+    return {
+      success: false,
+      error: errorInfo.type,
+      message: errorInfo.userMessage,
+      details: errorInfo.message
+    };
+  }
+};
+```
+
+## Security Guidelines
+
+### 1. Secure API Key Management
+
+```javascript
+// Good: Use environment variables
+const apiKey = process.env.PAYWALL_API_KEY;
+
+// Bad: Hardcode API keys
+// const apiKey = 'your-api-key-here'; // Never do this!
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Paywall Tokenization" 
+    href="/docs-v2/paywall/tokenization"
+  />
+  <Cards.Card 
+    title="Get User Data" 
+    href="/docs-v2/paywall-api/get-user"
+  />
+  <Cards.Card 
+    title="Modify Balances (Test)" 
+    href="/docs-v2/paywall-api/modify-balances"
+  />
+</Cards>

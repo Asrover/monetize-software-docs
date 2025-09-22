@@ -1,0 +1,257 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+import {
+  ExclamationTriangleIcon,
+  BookOpenIcon,
+  ChartBarIcon
+} from '@/components/account/icons';
+import Image from 'next/image';
+
+# Create Payment Processor
+
+Step-by-step guide to creating and configuring a payment processor for handling payments in your application.
+
+<Callout>
+  **What is a payment processor?** It's an intermediary between your application and payment systems (Stripe/Paddle) that processes transactions and manages subscriptions. [Read mode](/docs-v2/payment-processor/overview)
+</Callout>
+
+<Steps>
+
+### Step 1: Creating a New Payment Processor
+
+Navigate to the "Payment Processors" section and click the "New Payment Processor" button.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create payment processor](/docs/pp-create.png)
+</div>
+
+### Step 2: Choose Payment System
+
+Select one of the supported payment systems:
+
+<Tabs items={['Stripe', 'Paddle']}>
+  <Tabs.Tab>
+    **Stripe**
+    
+    Popular payment system with wide support for cards and payment methods.
+    
+    **Advantages:**
+    - Support for most bank cards
+    - Global coverage
+    - Simple integration
+    - Detailed analytics
+    
+    **Best for:**
+    - International projects
+    - SaaS applications
+    - Web services
+    
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Paddle**
+    
+    Payment system specializing in digital products and subscriptions.
+    
+    **Advantages:**
+    - Built-in tax handling
+    - Support for multiple currencies
+    - Specialization in digital goods
+    - Global tax compliance
+    
+    **Best for:**
+    - Digital products
+    - Software
+    - Online courses
+    
+  </Tabs.Tab>
+</Tabs>
+
+### Step 3: Choose Operation Mode
+
+Configure the payment processor operation mode:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Mode</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Usage</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Test**</Table.Td>
+      <Table.Td>Mode for development and testing</Table.Td>
+      <Table.Td>Development, debugging, testing</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Live (Production)**</Table.Td>
+      <Table.Td>Mode for real payments</Table.Td>
+      <Table.Td>Production application</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **Important!** Always start with test mode. After configuring and testing all functions, you can switch to production mode.
+</Callout>
+
+### Step 4: Payment Processor Configuration
+
+<Tabs items={['Stripe', 'Paddle']}>
+  <Tabs.Tab>
+    If you chose Stripe, you need to configure API keys:
+
+    <Callout type="info">
+      You can find API keys in the [Stripe dashboard](https://dashboard.stripe.com/apikeys) (for test mode: [test keys](https://dashboard.stripe.com/test/apikeys))
+    </Callout>
+
+    **Required data for Stripe:**
+
+    <Table>
+      <thead>
+        <Table.Tr>
+          <Table.Th>Field</Table.Th>
+          <Table.Th>Description</Table.Th>
+          <Table.Th>Format</Table.Th>
+        </Table.Tr>
+      </thead>
+      <tbody>
+        <Table.Tr>
+          <Table.Td>**Publishable Key**</Table.Td>
+          <Table.Td>Public key for client-side</Table.Td>
+          <Table.Td>`pk_test_...` or `pk_live_...`</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>**Secret Key**</Table.Td>
+          <Table.Td>Secret key for server-side</Table.Td>
+          <Table.Td>`sk_test_...` or `sk_live_...`</Table.Td>
+        </Table.Tr>
+      </tbody>
+    </Table>
+
+    <Callout type="warning">
+      **Security:** Never expose the secret key. It should only be used on the server.
+    </Callout>
+
+    **Additional Stripe settings:**
+
+    - **Customer Portal**: Configure customer portal in [Stripe settings](https://dashboard.stripe.com/settings/billing/portal)
+    - **Webhooks**: The system will automatically create a webhook for event processing
+
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+  If you chose Paddle, you'll need more configuration:
+
+    <Callout type="info">
+    For test mode, register at [Paddle Sandbox](https://sandbox-vendors.paddle.com/signup), for production - at [Paddle](https://vendors.paddle.com/signup)
+
+  </Callout>
+
+**Required data for Paddle:**
+
+    <Table>
+    <thead>
+      <Table.Tr>
+        <Table.Th>Field</Table.Th>
+        <Table.Th>Description</Table.Th>
+        <Table.Th>Where to find</Table.Th>
+      </Table.Tr>
+    </thead>
+    <tbody>
+      <Table.Tr>
+        <Table.Td>**Vendor ID**</Table.Td>
+        <Table.Td>Unique ID of your account</Table.Td>
+        <Table.Td>Test: [Authentication](https://sandbox-vendors.paddle.com/authentication) Live: [Authentication](https://vendors.paddle.com/authentication) </Table.Td>
+      </Table.Tr>
+      <Table.Tr>
+        <Table.Td>**API Key**</Table.Td>
+        <Table.Td>Key for API access</Table.Td>
+        <Table.Td>Test: [API v2](https://sandbox-vendors.paddle.com/authentication-v2) Live: [API v2](https://vendors.paddle.com/authentication-v2)</Table.Td>
+      </Table.Tr>
+      <Table.Tr>
+        <Table.Td>**Public Key**</Table.Td>
+        <Table.Td>Public key for verification</Table.Td>
+        <Table.Td>Test: [Public Key](https://sandbox-vendors.paddle.com/public-key) Live: [Public Key](https://vendors.paddle.com/public-key)</Table.Td>
+      </Table.Tr>
+      <Table.Tr>
+        <Table.Td>**Client Token**</Table.Td>
+        <Table.Td>Token for client-side</Table.Td>
+        <Table.Td>Test: [API v2](https://sandbox-vendors.paddle.com/authentication-v2) Live: [API v2](https://vendors.paddle.com/authentication-v2)</Table.Td>
+      </Table.Tr>
+      <Table.Tr>
+        <Table.Td>**Checkout URL**</Table.Td>
+        <Table.Td>URL of checkout page</Table.Td>
+        <Table.Td>Your domain + /checkout</Table.Td>
+      </Table.Tr>
+    </tbody>
+
+  </Table>
+
+    <Callout type="warning">
+    **Important for API Key:** When creating an API key, be sure to select "Never Expires" and all read/write permissions. Otherwise, you may lose transactions.
+
+  </Callout>
+
+**Paddle Checkout Setup:**
+
+1. **Domain verification**: Verify domain ownership in [Paddle settings](https://vendors.paddle.com/request-domain-approval)
+2. **Create checkout page**: Create a `/checkout` page on your domain
+3. **Install template**: Use the ready-made checkout page template
+
+  </Tabs.Tab>
+</Tabs>
+
+### Step 5: Save
+
+After filling in all fields:
+
+1. **Key validation**: The system will automatically verify the correctness of API keys
+2. **Webhook creation**: A webhook for event processing will be created automatically
+3. **Activation**: The processor will be activated and ready to use
+
+</Steps>
+
+## Troubleshooting
+
+<Accordion>
+  <Accordion.Item title="Stripe key validation error">
+    Check:
+    - Correctness of copied keys
+    - Key compliance with selected mode (test/live)
+    - Access permissions in Stripe account
+  </Accordion.Item>
+  
+  <Accordion.Item title="Paddle key validation error">
+    Make sure that:
+    - API Key is created with "Never Expires" and full permissions
+    - Vendor ID contains only numbers
+    - You're using the correct environment (sandbox/production)
+  </Accordion.Item>
+</Accordion>
+
+## Next Steps
+
+After creating the payment processor:
+
+<Cards>
+  <Cards.Card 
+    title="Connect to Paywall" 
+    href="/docs-v2/paywall/connect-payment-processor"
+  />
+  <Cards.Card 
+    title="Configure Webhooks" 
+    href="/docs-v2/webhooks/overview"
+  />
+</Cards>
+
+## Best Practices
+
+1. **Security**: Never store API keys in plain text
+2. **Testing**: Always test payments before going live

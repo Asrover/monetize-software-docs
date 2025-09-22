@@ -1,0 +1,235 @@
+import {
+  Callout,
+  Cards,
+  Tabs
+} from 'nextra/components';
+
+# Paywall Events
+
+Use events to update elements in your frontend and respond to paywall state changes in real-time.
+
+## Overview
+
+Paywall events provide real-time updates about user authentication, payment status, and paywall visibility. These events help you create responsive UIs that automatically update based on user interactions with the paywall.
+
+## Event Listener Setup
+
+### Basic Event Listener
+
+```javascript
+// Add event listener for paywall events
+window.addEventListener('message', function (event) {
+  if (
+    event.data?.type === 'state' &&
+    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+  ) {
+    // Handle paywall state changes
+    console.log('Paywall state changed:', event.data);
+  }
+});
+```
+
+## State Interface
+
+```typescript
+interface State {
+  visibility_status?: 'init' | 'invisible' | 'visible';
+  purchase_status?: 'init' | 'paid' | 'failed';
+  auth_status?: 'init' | 'signed-in' | 'signed-out' | 'failed';
+  visibility_status_reason?:
+    | 'openings-trial'
+    | 'time-trial'
+    | 'country-not-match'
+    | 'visibility-turned-off'
+    | 'closed-by-user'
+    | 'active-payment-found'
+    | 'success-payment'
+    | 'tokenization-sign-in'
+    | 'error';
+  purchase_status_reason?:
+    | 'restored'
+    | 'active-payment-found'
+    | 'success-payment';
+  user?: {};
+  purchases?: []
+}
+```
+
+## Visibility Status Reasons
+
+| Reason                  | Description                                                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openings-trial`        | When calling `paywall.open()`, if the type of trial specified in the paywall settings is "number of trial actions" and the user's actions have not exceeded the specified number, the paywall will not open.   |
+| `time-trial`            | When calling `paywall.open()`, if the type of trial specified in the paywall settings is "trial time" and the user's first time open have not exceeded the specified time in hours, the paywall will not open. |
+| `country-not-match`     | The user's country does not match the country specified in the paywall settings.                                                                                                                               |
+| `visibility-turned-off` | Paywall's visibility setting is turned off.                                                                                                                                                                    |
+| `closed-by-user`        | The user closed the paywall.                                                                                                                                                                                   |
+| `active-payment-found`  | The user's purchase has been restored after the account recovery.                                                                                                                                              |
+| `success-payment`       | The user made a purchase.                                                                                                                                                                                      |
+| `tokenization-sign-in`  | The user is authenticated, which triggers when tokenization is enabled.                                                                                                                                        |
+| `error`                 | An error occurred.                                                                                                                                                                                             |
+
+## Practical Examples
+
+### Authentication Status Handler
+
+```javascript
+window.addEventListener('message', function (event) {
+  if (
+    event.data?.type === 'state' &&
+    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+  ) {
+    const { auth_status, user } = event.data;
+
+    switch (auth_status) {
+      case 'signed-in':
+        console.log('User signed in:', user);
+        showUserMenu(user);
+        break;
+      case 'signed-out':
+        console.log('User signed out');
+        hideUserMenu();
+        break;
+      case 'failed':
+        console.log('Authentication failed');
+        showErrorMessage('Authentication failed');
+        break;
+    }
+  }
+});
+```
+
+### Paywall Visibility Handler
+
+```javascript
+window.addEventListener('message', function (event) {
+  if (
+    event.data?.type === 'state' &&
+    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+  ) {
+    const { visibility_status, visibility_status_reason } = event.data;
+
+    if (visibility_status === 'visible') {
+      // Blur content when paywall is visible
+      document.getElementById('main-content').style.filter = 'blur(3px)';
+    } else if (visibility_status === 'invisible') {
+      // Remove blur when paywall is hidden
+      document.getElementById('main-content').style.filter = 'none';
+
+      // Handle specific reasons
+      if (visibility_status_reason === 'success-payment') {
+        showSuccessMessage('Payment completed successfully!');
+      }
+    }
+  }
+});
+```
+
+### Purchase Status Handler
+
+```javascript
+window.addEventListener('message', function (event) {
+  if (
+    event.data?.type === 'state' &&
+    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+  ) {
+    const { purchase_status, purchase_status_reason, purchases } = event.data;
+
+    if (purchase_status === 'paid') {
+      console.log('User has active subscription');
+      enablePremiumFeatures();
+
+      if (purchase_status_reason === 'success-payment') {
+        showMessage('Welcome to Premium!');
+      }
+    } else if (purchase_status === 'failed') {
+      console.log('Purchase failed');
+      showErrorMessage('Purchase failed. Please try again.');
+    }
+  }
+});
+```
+
+### React Hook for Events
+
+```javascript
+import { useEffect, useState } from 'react';
+
+const usePaywallEvents = () => {
+  const [paywallState, setPaywallState] = useState({
+    visibility: 'init',
+    auth: 'init',
+    purchase: 'init',
+    user: null
+  });
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (
+        event.data?.type === 'state' &&
+        ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+      ) {
+        setPaywallState(prevState => ({
+          ...prevState,
+          visibility: event.data.visibility_status || prevState.visibility,
+          auth: event.data.auth_status || prevState.auth,
+          purchase: event.data.purchase_status || prevState.purchase,
+          user: event.data.user || prevState.user
+        }));
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  return {
+    isPaywallVisible: paywallState.visibility === 'visible',
+    isAuthenticated: paywallState.auth === 'signed-in',
+    isPaid: paywallState.purchase === 'paid',
+    user: paywallState.user
+  };
+};
+```
+
+## Use Cases
+
+### Navigation Updates
+
+```javascript
+// Update navigation based on auth status
+window.addEventListener('message', function (event) {
+  if (
+    event.data?.type === 'state' &&
+    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+  ) {
+    const signInBtn = document.getElementById('sign-in');
+    const userMenu = document.getElementById('user-menu');
+
+    if (event.data.auth_status === 'signed-in') {
+      signInBtn.style.display = 'none';
+      userMenu.style.display = 'block';
+    } else if (event.data.auth_status === 'signed-out') {
+      signInBtn.style.display = 'block';
+      userMenu.style.display = 'none';
+    }
+  }
+});
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Open Paywall" 
+    href="/docs-v2/paywall-api/open"
+  />
+  <Cards.Card 
+    title="Get User Data" 
+    href="/docs-v2/paywall-api/get-user"
+  />
+  <Cards.Card 
+    title="Sign Out User" 
+    href="/docs-v2/paywall-api/sign-out"
+  />
+</Cards>

@@ -1,0 +1,188 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs,
+} from 'nextra/components';
+
+# Connect Payment Processor to Paywall
+
+Learn how to connect payment processors to your paywalls to enable transaction processing and handle payments effectively.
+
+<Callout>
+  **Prerequisites:** You must have at least one [payment processor created](/docs-v2/payment-processor/create-payment-processor) before connecting it to a paywall.
+</Callout>
+
+## Overview
+
+Connecting payment processors to paywalls allows you to:
+
+- Process transactions through multiple payment providers
+- Distribute risk across different payment systems
+
+<Steps>
+
+### Step 1: Access Payment Processor Manager
+
+Navigate to your paywall settings and locate the "Payment Processor Manager" button. This is where you can manage which payment processors are connected to your specific paywall.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Connect payment processor](/docs/pp-connect.png)
+</div>
+
+### Step 2: Understanding Test vs Live Mode
+
+The system automatically shows payment processors based on your paywall's current mode:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Paywall Mode</Table.Th>
+      <Table.Th>Available Processors</Table.Th>
+      <Table.Th>Usage</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Test Mode**</Table.Td>
+      <Table.Td>Only test payment processors</Table.Td>
+      <Table.Td>Development and testing</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Live Mode**</Table.Td>
+      <Table.Td>Only live payment processors</Table.Td>
+      <Table.Td>Production environment</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **Important:** Test payment processors connected will only be available when the paywall is in test mode. When you switch paywall to live mode, only live connected payment processors will be available for clients.
+</Callout>
+
+### Step 3: Select Payment Processors
+
+Choose which payment processors you want to connect to your paywall:
+
+1. **Open the Payment Processor Manager modal**
+2. **Review available processors** - You'll see a list of all payment processors created in the current mode
+3. **Select processors** - Use checkboxes to select which ones to connect
+4. **Review processor information:**
+   - **Name** - Custom name you assigned
+   - **Mode** - Test or Live indicator
+   - **Provider** - Stripe, Paddle, etc.
+
+<Callout type="info">
+  **Risk Distribution:** You can select multiple payment processors. Transactions will be divided equally between the selected acquiring services to minimize risks.
+</Callout>
+
+### Step 4: Save Configuration
+
+After selecting your payment processors:
+
+1. **Click "Save"** to apply the configuration
+2. **Wait for confirmation** - The system will update the connections
+
+</Steps>
+
+## Payment Processing Logic
+
+When multiple payment processors are connected:
+
+<Callout type="info">
+  **Load Distribution:** Transactions are automatically distributed equally between all connected payment processors. This helps balance load and reduce dependency on a single provider.
+</Callout>
+
+### Transaction Flow
+
+1. **Customer initiates payment**
+2. **System selects processor** - Automatically chooses from connected processors
+3. **Payment processing** - Transaction is handled by selected processor
+4. **Confirmation** - Payment success/failure is reported back
+
+## Removing Processors
+
+To remove payment processors:
+
+1. Uncheck the processors you want to disconnect
+2. Save the configuration
+3. Removed processors will no longer process new transactions
+
+<Callout type="warning">
+  **Active Transactions:** Removing a payment processor doesn't affect ongoing transactions or existing subscriptions. Only new transactions will use the updated processor list.
+</Callout>
+
+## Troubleshooting
+
+<Accordion>
+  <Accordion.Item title="No payment processors available">
+    **Possible causes:**
+    - No payment processors created in the current mode
+    - All processors are in different mode (test vs live)
+    - Processors are not properly configured
+    
+    **Solution:**
+    - Create payment processors in the correct mode
+    - Verify processor configuration
+    - Check processor status in the main dashboard
+  </Accordion.Item>
+  
+  <Accordion.Item title="Cannot select a processor">
+    **Possible causes:**
+    - Processor is marked as unavailable
+    - Shared processor with restricted access
+    - Processor configuration issues
+    
+    **Solution:**
+    - Contact support for shared processors
+    - Verify processor configuration
+    - Check processor credentials and webhook setup
+  </Accordion.Item>
+  
+  <Accordion.Item title="Payments not processing">
+    **Possible causes:**
+    - No processors connected to paywall
+    - Configuration errors in payment processors
+    
+    **Solution:**
+    - Ensure at least one processor is connected
+    - Verify processor status and credentials
+    - Review processor logs for errors
+  </Accordion.Item>
+</Accordion>
+
+## Best Practices
+
+### Redundancy and Reliability
+
+1. **Multiple Processors** - Connect at least 2 payment processors for redundancy
+2. **Different Providers** - Use different payment systems (e.g., Stripe + Paddle)
+3. **Monitor Performance** - Track success rates for each processor
+
+## Next Steps
+
+After connecting payment processors to your paywall:
+
+<Cards>
+  <Cards.Card 
+    title="Configure Webhooks" 
+    href="/docs-v2/webhooks/overview"
+  />
+  <Cards.Card 
+    title="Test Payments" 
+    href="/docs-v2/paywall/demo"
+  />
+  <Cards.Card 
+    title="Monitor Transactions" 
+    href="/docs-v2/analytics/summary"
+  />
+</Cards>
+
+## API Reference
+
+For programmatic management of payment processor connections, see:
+
+- [Payment Processor API](/docs-v2/paywall-api/payment-processors)
+- [Webhook Events](/docs-v2/webhooks/events)
+- [Transaction API](/docs-v2/paywall-api/transactions)

@@ -1,0 +1,515 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Tabs
+} from 'nextra/components';
+
+# Webhook Events and Scenarios
+
+Learn about different webhook events and their usage scenarios to properly handle subscription and payment workflows.
+
+## Event Types
+
+### 1. payment.completed
+
+**Description:** Completion of a one-time payment (lifetime)
+
+**When sent:** When a one-time product or service payment is successful
+
+**Use cases:**
+
+- Lifetime access purchases
+- One-time product purchases
+- Single service payments
+
+### 2. subscription.created
+
+**Description:** Creation of a new subscription
+
+**When sent:** When a user creates a subscription for the first time
+
+**Use cases:**
+
+- New subscription activation
+- Trial period start
+- Initial subscription setup
+
+### 3. subscription.updated
+
+**Description:** Update of an existing subscription
+
+**When sent:** When subscription status, plan, or other parameters change
+
+**Use cases:**
+
+- Plan upgrades/downgrades
+- Subscription renewals
+- Status changes
+- Reactivation
+
+<Callout type="info">
+  **Paddle Note:** Paddle may sometimes send multiple consecutive `subscription.updated` webhooks for the same subscription, even if business data (status, product, price) hasn't changed. This is normal platform behavior and doesn't require special handling.
+</Callout>
+
+### 4. subscription.cancelled
+
+**Description:** Subscription cancellation
+
+**When sent:** When a subscription is cancelled by user or system
+
+**Use cases:**
+
+- User cancellation
+- Failed payment cancellation
+- Administrative cancellation
+
+### 5. refund.created
+
+**Description:** Creation of a refund
+
+**When sent:** When a payment refund is processed
+
+**Use cases:**
+
+- Customer refund requests
+- Administrative refunds
+- Dispute resolutions
+
+## Event Scenarios
+
+### Scenario 1: Lifetime Access Purchase
+
+| Step | Event               | Description                                |
+| ---- | ------------------- | ------------------------------------------ |
+| 1    | User makes payment  | User completes payment for lifetime access |
+| 2    | `payment.completed` | Payment successfully processed             |
+
+<Steps>
+### Payment Successful
+
+```json
+{
+  "type": "payment.completed",
+  "data": {
+    "payment": {
+      "id": "pi_lifetime123",
+      "status": "succeeded"
+    },
+    "price": {
+      "interval": "lifetime"
+    }
+  }
+}
+```
+
+Event: **payment.completed** - payment successfully completed
+
+</Steps>
+
+**In case of refund:**
+
+<Steps>
+### Refund Processed
+
+```json
+{
+  "type": "refund.created",
+  "data": {
+    "refund": {
+      "id": "re_refund123",
+      "reason": "requested_by_customer",
+      "amount": 9999
+    }
+  }
+}
+```
+
+Event: **refund.created** - refund processed
+
+</Steps>
+
+### Scenario 2: Subscription Without Trial
+
+| Step | Event                  | Description                             |
+| ---- | ---------------------- | --------------------------------------- |
+| 1    | User subscribes        | User completes payment for subscription |
+| 2    | `subscription.created` | Subscription created and activated      |
+
+<Steps>
+### Subscription Created
+
+```json
+{
+  "type": "subscription.created",
+  "data": {
+    "subscription": {
+      "id": "sub_active123",
+      "status": "active",
+      "current_period_start": "2024-01-15T12:30:45.000Z",
+      "current_period_end": "2024-02-15T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.created** - subscription created and activated
+
+</Steps>
+
+**On subscription renewal:**
+
+<Steps>
+### Subscription Renewed
+
+```json
+{
+  "type": "subscription.updated",
+  "data": {
+    "subscription": {
+      "id": "sub_active123",
+      "status": "active",
+      "current_period_start": "2024-02-15T12:30:45.000Z",
+      "current_period_end": "2024-03-15T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.updated** - subscription automatically renewed
+
+Updated `subscription.current_period_start` and `subscription.current_period_end` will be sent for the current subscription
+
+</Steps>
+
+**On subscription cancellation:**
+
+<Tabs items={['End of Period', 'Immediate Cancellation']}>
+  <Tabs.Tab>
+    **Variant A:** Cancellation at period end
+    
+    | Step | Event | Description |
+    |------|-------|-------------|
+    | 1 | User cancels | User requests cancellation |
+    | 2 | End of period | Subscription remains active until period end |
+    | 3 | `subscription.cancelled` | Subscription cancelled at period end |
+
+    ```json
+    {
+      "type": "subscription.cancelled",
+      "data": {
+        "subscription": {
+          "id": "sub_active123",
+          "status": "cancelled",
+          "cancel_at_period_end": true,
+          "cancelled_at": "2024-02-15T12:30:45.000Z"
+        }
+      }
+    }
+    ```
+
+    Event: **subscription.cancelled** - subscription cancelled at period end
+
+    <Callout type="info">
+      Subscription remains in `active` status until the end of the period, then the subscription status changes to `cancelled`.
+    </Callout>
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Variant B:** Immediate cancellation
+    
+    | Step | Event | Description |
+    |------|-------|-------------|
+    | 1 | User cancels | User requests immediate cancellation |
+    | 2 | `subscription.cancelled` | Subscription immediately cancelled |
+
+    ```json
+    {
+      "type": "subscription.cancelled",
+      "data": {
+        "subscription": {
+          "id": "sub_active123",
+          "status": "cancelled",
+          "cancel_at_period_end": false,
+          "cancelled_at": "2024-01-20T12:30:45.000Z"
+        }
+      }
+    }
+    ```
+
+    Event: **subscription.cancelled** - subscription immediately cancelled
+
+  </Tabs.Tab>
+</Tabs>
+
+### Scenario 3: Subscription With Trial Period
+
+| Step | Event                  | Description                                |
+| ---- | ---------------------- | ------------------------------------------ |
+| 1    | User starts trial      | User begins trial period                   |
+| 2    | `subscription.created` | Subscription created with status: trialing |
+| 3    | Trial period ends      | Trial period expires                       |
+| 4    | `subscription.updated` | Subscription updated with status: active   |
+
+<Steps>
+### Trial Started
+
+```json
+{
+  "type": "subscription.created",
+  "data": {
+    "subscription": {
+      "id": "sub_trial123",
+      "status": "trialing",
+      "trial_period_start": "2024-01-15T12:30:45.000Z",
+      "trial_period_end": "2024-01-22T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.created** - subscription created with status "trialing"
+
+Fields `subscription.trial_period_start` and `subscription.trial_period_end` will also be provided
+
+### Trial Ended
+
+```json
+{
+  "type": "subscription.updated",
+  "data": {
+    "subscription": {
+      "id": "sub_trial123",
+      "status": "active",
+      "current_period_start": "2024-01-22T12:30:45.000Z",
+      "current_period_end": "2024-02-22T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.updated** - trial period ended, subscription became active
+
+Updated `subscription.current_period_start` and `subscription.current_period_end` will be sent for the current subscription
+
+</Steps>
+
+**If user cancels during trial:**
+
+<Steps>
+### Trial Cancelled
+
+```json
+{
+  "type": "subscription.cancelled",
+  "data": {
+    "subscription": {
+      "id": "sub_trial123",
+      "status": "cancelled",
+      "cancelled_at": "2024-01-18T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.cancelled** - subscription cancelled during trial period
+
+</Steps>
+
+### Scenario 4: Plan Change (Upgrade/Downgrade)
+
+| Step | Event                  | Description                                   |
+| ---- | ---------------------- | --------------------------------------------- |
+| 1    | User changes plan      | User upgrades or downgrades subscription plan |
+| 2    | `subscription.updated` | Subscription updated with new plan            |
+
+<Steps>
+### Plan Changed
+
+```json
+{
+  "type": "subscription.updated",
+  "data": {
+    "subscription": {
+      "id": "sub_active123",
+      "status": "active"
+    },
+    "price": {
+      "id": "price_new_plan",
+      "unit_amount": 4999,
+      "interval": "month"
+    }
+  }
+}
+```
+
+Event: **subscription.updated** - subscription plan changed
+
+</Steps>
+
+**Possible changes leading to subscription.updated:**
+
+- Plan change (upgrade/downgrade)
+- Subscription renewal
+- Reactivation of cancelled subscription
+
+### Scenario 5: Subscription Refund
+
+| Step | Event                    | Description                          |
+| ---- | ------------------------ | ------------------------------------ |
+| 1    | Refund requested         | Active subscription refund requested |
+| 2    | `refund.created`         | Refund processed                     |
+| 3    | `subscription.cancelled` | Subscription cancelled due to refund |
+
+<Steps>
+### Refund Created
+
+```json
+{
+  "type": "refund.created",
+  "data": {
+    "refund": {
+      "id": "re_sub_refund456",
+      "reason": "requested_by_customer",
+      "amount": 2999
+    }
+  }
+}
+```
+
+Event: **refund.created** - refund processed
+
+### Subscription Cancelled
+
+```json
+{
+  "type": "subscription.cancelled",
+  "data": {
+    "subscription": {
+      "id": "sub_active123",
+      "status": "cancelled",
+      "cancelled_at": "2024-01-20T12:30:45.000Z"
+    }
+  }
+}
+```
+
+Event: **subscription.cancelled** - subscription cancelled due to refund
+
+</Steps>
+
+## Event Handling Examples
+
+### Complete Event Handler
+
+```javascript
+const handleWebhookEvent = async (event) => {
+  const { type, data } = event;
+
+  switch (type) {
+    case 'payment.completed':
+      await handlePaymentCompleted(data);
+      break;
+
+    case 'subscription.created':
+      await handleSubscriptionCreated(data);
+      break;
+
+    case 'subscription.updated':
+      await handleSubscriptionUpdated(data);
+      break;
+
+    case 'subscription.cancelled':
+      await handleSubscriptionCancelled(data);
+      break;
+
+    case 'refund.created':
+      await handleRefundCreated(data);
+      break;
+
+    default:
+      console.log(`Unhandled event type: ${type}`);
+  }
+};
+
+// Handler implementations
+const handlePaymentCompleted = async (data) => {
+  const { payment, price, user, customer } = data;
+
+  if (price.interval === 'lifetime') {
+    // Grant lifetime access
+    await grantLifetimeAccess(user.id);
+    console.log(`Lifetime access granted to user ${user.id}`);
+  } else {
+    // Handle one-time payment
+    await processOneTimePayment(payment.id, user.id);
+  }
+
+  // Send confirmation email
+  await sendPaymentConfirmation(customer.email, price.unit_amount);
+};
+
+const handleSubscriptionCreated = async (data) => {
+  const { subscription, user, customer } = data;
+
+  if (subscription.status === 'trialing') {
+    // Start trial period
+    await startTrialPeriod(user.id, subscription.trial_period_end);
+    console.log(`Trial started for user ${user.id}`);
+  } else if (subscription.status === 'active') {
+    // Activate subscription immediately
+    await activateSubscription(user.id, subscription.id);
+    console.log(`Subscription activated for user ${user.id}`);
+  }
+
+  // Send welcome email
+  await sendWelcomeEmail(customer.email, subscription.status);
+};
+```
+
+## Best Practices
+
+### 1. Handle Event Order
+
+<Callout type="warning">
+  **Event Order:** Events may not always arrive in chronological order. Always check timestamps and handle out-of-order events.
+</Callout>
+
+```javascript
+const handleEventWithOrder = async (event) => {
+  const lastProcessedTime = await getLastProcessedTime(event.data.user.id);
+
+  if (new Date(event.created_at) < lastProcessedTime) {
+    console.log('Out of order event, handling carefully...');
+    // Handle out-of-order event logic
+  }
+
+  await processEvent(event);
+  await updateLastProcessedTime(event.data.user.id, event.created_at);
+};
+```
+
+### 2. Idempotency
+
+```javascript
+const processedEvents = new Set();
+
+const handleIdempotentEvent = async (event) => {
+  if (processedEvents.has(event.id)) {
+    console.log(`Event ${event.id} already processed`);
+    return;
+  }
+
+  await processEvent(event);
+  processedEvents.add(event.id);
+};
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Webhook Overview" 
+    href="/docs-v2/webhooks/overview"
+  />
+</Cards>

@@ -1,0 +1,87 @@
+import {
+  Callout,
+} from 'nextra/components';
+
+# Custom Domains Overview
+
+Custom domains allow you to use your own domain for displaying paywalls instead of the standard `onlineapp.pro`. This makes the payment process more trustworthy for your users and improves branding.
+
+## What are custom domains?
+
+A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or `api.yoursite.com`) that will be used to display the paywall. Instead of users seeing `onlineapp.pro` in the address bar, they will see your domain.
+
+<Callout type="info">
+  **Important:** The checkout page itself will open on the domain specified in your payment processor settings and is not related to the custom domain. The custom domain only affects the paywall display and authentication process, not the actual payment process.
+</Callout>
+
+## Benefits of using custom domains
+
+### 🔒 Solving third-party cookie blocking issues
+
+**Main problem:** Many browsers block third-party cookies by default. When a paywall loads from the `onlineapp.pro` domain while your site is on a different domain, the browser may block authentication cookies, leading to user login issues.
+
+<Callout type="warning">
+  This issue is **only relevant for SaaS applications and websites**. If you're building a **browser extension**, this problem doesn't apply to you since extensions use Chrome's built-in storage for authentication instead of cookies.
+</Callout>
+
+**Solution:** Using a custom domain (subdomain of your main site) bypasses these restrictions, as browsers consider subdomains part of the same domain.
+
+### 🎨 Improved branding
+
+- Users see your domain in the address bar
+- Increases trust in the payment process
+- Creates a consistent user experience
+
+### 🚀 Higher conversion rates
+
+- Users are more likely to complete payment when seeing a familiar domain
+- Reduces abandonment due to distrust of third-party domains
+- Improves overall perception of your service
+
+## Technical requirements
+
+### Supported domain types
+
+✅ **Supported:** Third-level subdomains
+- `api.yoursite.com`
+- `pay.yoursite.com`
+- `paywall.yoursite.com`
+
+❌ **Not supported:** Root domains
+- `yoursite.com`
+- `www.yoursite.com`
+
+### DNS configuration
+
+To make a custom domain work, delegate your subdomain to DigitalOcean by creating NS records for the subdomain in your primary DNS provider. Example for `pay.yoursite.com`:
+
+```
+NS pay.yoursite.com ns1.digitalocean.com
+NS pay.yoursite.com ns2.digitalocean.com
+NS pay.yoursite.com ns3.digitalocean.com
+```
+
+This is called subdomain delegation. You do NOT need to change nameservers for the entire root domain — only delegate the specific subdomain (e.g., `pay`).
+
+## Setup process
+
+1. **Add domain** — add the subdomain in settings
+2. **Delegate via NS** — create NS records for your subdomain pointing to DigitalOcean (ns1-3)
+3. **Verification** — we check NS records; if valid, the domain gets the status **"Waiting for moderation"**
+4. **Moderation** — moderator sets the domain to **"Verified"**
+5. **Link to paywall** — select the verified domain for a specific paywall and get the updated installation script
+
+## Security
+
+- Automatic NS record validation to prevent misconfiguration
+- Moderation step to protect against unauthorized domain usage
+
+## Limitations
+
+- Maximum DNS propagation time: up to 48 hours
+- Only third-level subdomains are supported
+- Your DNS provider must support subdomain delegation via NS records
+
+---
+
+Ready to start? Go to [creating a custom domain](/docs-v2/custom-domains/create-domain).

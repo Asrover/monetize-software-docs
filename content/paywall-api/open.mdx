@@ -1,0 +1,549 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+
+# Open Paywall
+
+Learn how to programmatically open the paywall using the `paywall.open()` method. This allows you to trigger the paywall display at the right moment in your user flow.
+
+## Overview
+
+The `paywall.open()` method displays the paywall interface to users, allowing them to:
+
+- **Sign in** to existing accounts
+- **Purchase subscriptions** or make payments
+- **Restore previous purchases**
+- **View subscription options** and pricing
+- **Access trial offers** if configured
+- **Preview paywall** without consuming trial attempts (v2.1.1+)
+
+<Callout type="info">
+  **Smart Opening Logic:** The paywall will only open if country targeting settings match, trial period conditions are met, and the user doesn't have an active subscription or lifetime payment.
+</Callout>
+
+## Basic Usage
+
+### Simple Paywall Opening
+
+```javascript
+try {
+  await paywall.open();
+  // Paywall has status visible
+  console.log('Paywall opened successfully');
+} catch (error) {
+  // Paywall has status invisible
+  console.log('Paywall could not be opened:', error);
+}
+```
+
+### With Parameters
+
+You can customize paywall behavior by passing parameters:
+
+```javascript
+try {
+  await paywall.open({
+    resolveEvent: 'success-purchase'
+  });
+  // User completed a purchase
+  console.log('User successfully purchased subscription');
+} catch (error) {
+  // User dismissed paywall without purchasing
+  console.log('Purchase was not completed');
+}
+```
+
+## Resolve Events
+
+Control when the `paywall.open()` promise resolves by specifying different events:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Resolve Event</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Use Case</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**opened**</Table.Td>
+      <Table.Td>Promise resolves when the paywall opens</Table.Td>
+      <Table.Td>Just need to know the paywall appeared</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**signed-in**</Table.Td>
+      <Table.Td>Promise resolves when user signed in</Table.Td>
+      <Table.Td>Need user authentication for API access</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**success-purchase**</Table.Td>
+      <Table.Td>Promise resolves when user paid or restored purchase</Table.Td>
+      <Table.Td>Unlock premium features after payment</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Parameters
+
+### consumeTrialOpen
+
+<Callout type="info">
+  **Available in v2.1.1+:** This parameter requires Paywall iframe script version 2.1.1 or higher.
+</Callout>
+
+The `consumeTrialOpen` parameter controls whether opening the paywall consumes a trial attempt. By default, it's set to `true`.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Value</Table.Th>
+      <Table.Th>Behavior</Table.Th>
+      <Table.Th>Use Case</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**true** (default)</Table.Td>
+      <Table.Td>Opening paywall consumes a trial attempt</Table.Td>
+      <Table.Td>Standard behavior - trial is consumed when user call paywall.open()</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**false**</Table.Td>
+      <Table.Td>Opening paywall does NOT consume a trial attempt</Table.Td>
+      <Table.Td>Preview paywall to user before consuming their trial</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+#### Example: Preview Paywall Without Consuming Trial
+
+```javascript
+// Show paywall to user without consuming their trial
+try {
+  await paywall.open({
+    consumeTrialOpen: false,
+    resolveEvent: 'opened'
+  });
+  console.log('User saw the paywall preview');
+  
+  // Trial is still available - user can decide to proceed
+  const userWantsToProceed = await askUserConfirmation();
+  
+  if (userWantsToProceed) {
+    // Now open with trial consumption
+    await paywall.open({
+      consumeTrialOpen: true,
+      resolveEvent: 'success-purchase'
+    });
+  }
+} catch (error) {
+  console.log('Could not show paywall preview');
+}
+```
+
+## Practical Examples
+
+### Authentication Flow
+
+Wait for user to sign in before allowing API access:
+
+```javascript
+const authenticateUser = async () => {
+  try {
+    await paywall.open({ resolveEvent: 'signed-in' });
+
+    // User is now authenticated
+    console.log('User authenticated successfully');
+
+    // Now you can make API requests
+    makeAPIRequest();
+
+  } catch (error) {
+    console.log('User did not authenticate');
+  }
+};
+```
+
+### Purchase Flow
+
+Wait for successful purchase before unlocking features:
+
+```javascript
+const unlockPremiumFeatures = async () => {
+  try {
+    await paywall.open({ resolveEvent: 'success-purchase' });
+
+    // User completed purchase
+    console.log('Purchase successful!');
+
+    // Unlock premium features
+    enablePremiumFeatures();
+    refreshUserSubscription();
+
+  } catch (error) {
+    console.log('Purchase was not completed');
+    showFreeFeatures();
+  }
+};
+```
+
+### React Integration
+
+Complete React component example:
+
+```javascript
+import { useState } from 'react';
+
+function PaywallButton() {
+  const [isOpening, setIsOpening] = useState(false);
+  const [userStatus, setUserStatus] = useState('guest');
+
+  const handleOpenPaywall = async (resolveEvent) => {
+    setIsOpening(true);
+
+    try {
+      await paywall.open({ resolveEvent });
+
+      switch (resolveEvent) {
+        case 'opened':
+          console.log('Paywall opened');
+          break;
+        case 'signed-in':
+          setUserStatus('authenticated');
+          console.log('User signed in');
+          break;
+        case 'success-purchase':
+          setUserStatus('premium');
+          console.log('User purchased subscription');
+          break;
+      }
+
+    } catch (error) {
+      console.log(`Action ${resolveEvent} was not completed`);
+      
+      // Handle specific reasons for paywall not opening
+      if (error.visibility_status_reason) {
+        switch (error.visibility_status_reason) {
+          case 'active-payment-found':
+            setUserStatus('premium');
+            console.log('User already has active subscription');
+            break;
+          case 'openings-trial':
+          case 'time-trial':
+            setUserStatus('trial');
+            console.log('User is in trial period');
+            break;
+          case 'closed-by-user':
+            console.log('User cancelled paywall');
+            break;
+          default:
+            console.log('Paywall unavailable:', error.visibility_status_reason);
+        }
+      }
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  return (
+    <div>
+      <p>User Status: {userStatus}</p>
+
+      <button
+        onClick={() => handleOpenPaywall('signed-in')}
+        disabled={isOpening}
+      >
+        {isOpening ? 'Opening...' : 'Sign In'}
+      </button>
+
+      <button
+        onClick={() => handleOpenPaywall('success-purchase')}
+        disabled={isOpening}
+      >
+        {isOpening ? 'Opening...' : 'Upgrade to Premium'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Display Modes
+
+### Fullscreen Mode (Default)
+
+By default, the paywall opens in fullscreen mode:
+
+```javascript
+// Opens in fullscreen
+await paywall.open();
+```
+
+### Container Mode
+
+To open the paywall within a specific container, configure the `paywallContainerId` in your installation script:
+
+```html
+<script>
+  window.paywall = {
+    paywallContainerId: 'my-paywall-container',
+    // other configuration
+  };
+</script>
+```
+
+Then create the container element in your HTML:
+
+```html
+<div id="my-paywall-container"></div>
+```
+
+```javascript
+// This will now open within the specified container
+await paywall.open();
+```
+
+## When Paywall Won't Open
+
+The paywall has built-in logic to prevent unnecessary displays. When `paywall.open()` fails, the error object contains a `visibility_status_reason` property that explains exactly why the paywall couldn't open.
+
+<Callout type="warning">
+  **Smart Prevention:** The paywall automatically prevents opening when it's not needed or appropriate. Always check `error.visibility_status_reason` for the specific reason.
+</Callout>
+
+### Visibility Status Reasons
+
+The `error.visibility_status_reason` property can have the following values:
+
+1. **`'active-payment-found'`** - User already has an active subscription or lifetime purchase
+2. **`'openings-trial'`** - User is in trial period (action-based trial)
+3. **`'time-trial'`** - User is in trial period (time-based trial)
+4. **`'country-not-match'`** - User's location doesn't match targeting settings
+5. **`'visibility-turned-off'`** - Paywall visibility is disabled in settings
+6. **`'closed-by-user'`** - User manually closed the paywall
+7. **`'error'`** - A technical error occurred
+
+### Handling Prevention
+
+```javascript
+try {
+  await paywall.open();
+  // Paywall opened successfully
+} catch (error) {
+  // Paywall was prevented from opening
+  console.log('Paywall could not open:', error.visibility_status_reason);
+
+  // Handle different scenarios based on reason
+  switch (error.visibility_status_reason) {
+    case 'active-payment-found':
+      showMessage('You already have an active subscription');
+      // Allow user to access premium features
+      enablePremiumFeatures();
+      break;
+    case 'openings-trial':
+    case 'time-trial':
+      showMessage('You are still in trial period');
+      // Allow user to use features during trial
+      enableTrialFeatures();
+      break;
+    case 'country-not-match':
+      showMessage('Paywall is not available in your region');
+      // Possibly show alternative options
+      showRegionalAlternatives();
+      break;
+    case 'visibility-turned-off':
+      showMessage('Service is temporarily unavailable');
+      // Allow free access when paywall is disabled
+      enableFreeAccess();
+      break;
+    case 'closed-by-user':
+      // User cancelled, no message needed
+      break;
+    default:
+      showMessage('Unable to open paywall');
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Appropriate Resolve Events
+
+```javascript
+// For authentication flows
+await paywall.open({ resolveEvent: 'signed-in' });
+
+// For feature unlocking
+await paywall.open({ resolveEvent: 'success-purchase' });
+
+// For simple display tracking
+await paywall.open({ resolveEvent: 'opened' });
+
+// For preview without consuming trial (v2.1.1+)
+await paywall.open({ 
+  resolveEvent: 'opened',
+  consumeTrialOpen: false 
+});
+```
+
+### 2. Provide User Feedback
+
+```javascript
+const [showingPaywall, setShowingPaywall] = useState(false);
+
+const openPaywall = async () => {
+  setShowingPaywall(true);
+  try {
+    await paywall.open({ resolveEvent: 'success-purchase' });
+    showSuccessMessage('Welcome to Premium!');
+  } catch (error) {
+    // User cancelled or error occurred
+  } finally {
+    setShowingPaywall(false);
+  }
+};
+```
+
+### 3. Handle All Outcomes
+
+```javascript
+const requestPremiumAccess = async () => {
+  try {
+    await paywall.open({ resolveEvent: 'success-purchase' });
+
+    // Success: unlock features
+    unlockPremiumFeatures();
+    trackEvent('subscription_purchased');
+
+  } catch (error) {
+    // Handle based on specific reason
+    switch (error.visibility_status_reason) {
+      case 'active-payment-found':
+        // User already has subscription - grant access
+        unlockPremiumFeatures();
+        trackEvent('subscription_already_active');
+        break;
+      case 'openings-trial':
+      case 'time-trial':
+        // User is in trial - allow limited access
+        unlockTrialFeatures();
+        trackEvent('trial_access_granted');
+        break;
+      case 'closed-by-user':
+        // User declined - show limited features
+        showLimitedFeatures();
+        trackEvent('subscription_declined');
+        break;
+      default:
+        // Other reasons - show appropriate message
+        showLimitedFeatures();
+        trackEvent('paywall_unavailable', { reason: error.visibility_status_reason });
+    }
+  }
+};
+```
+
+### 4. Smart Feature Access Control
+
+```javascript
+// Helper function to determine if user should have access
+const shouldAllowAccess = (error) => {
+  const allowedReasons = [
+    'active-payment-found',  // User has subscription
+    'openings-trial',        // Trial active
+    'time-trial',           // Trial active
+    'visibility-turned-off'  // Paywall disabled
+  ];
+  
+  return allowedReasons.includes(error.visibility_status_reason);
+};
+
+// Usage in feature gating
+const accessPremiumFeature = async () => {
+  try {
+    await paywall.open({ resolveEvent: 'success-purchase' });
+    // User purchased - full access
+    return true;
+  } catch (error) {
+    // Check if we should allow access anyway
+    return shouldAllowAccess(error);
+  }
+};
+```
+
+## Use Cases
+
+### Feature Gating
+
+```javascript
+const accessPremiumFeature = async () => {
+  if (!userHasPremium()) {
+    try {
+      await paywall.open({ resolveEvent: 'success-purchase' });
+      // User purchased - show premium feature
+      showPremiumFeature();
+    } catch (error) {
+      // Check if we should allow access based on reason
+      switch (error.visibility_status_reason) {
+        case 'active-payment-found':
+        case 'openings-trial':
+        case 'time-trial':
+        case 'visibility-turned-off':
+          // Allow access in these cases
+          showPremiumFeature();
+          break;
+        case 'closed-by-user':
+        case 'country-not-match':
+        default:
+          // Don't allow access, show alternative
+          showFreeAlternative();
+      }
+    }
+  } else {
+    // User already has premium
+    showPremiumFeature();
+  }
+};
+```
+
+### Onboarding Flow
+
+```javascript
+const completeOnboarding = async () => {
+  // Show app features
+  await showFeatureTour();
+
+  // Encourage subscription
+  const wantsUpgrade = await showUpgradePrompt();
+
+  if (wantsUpgrade) {
+    try {
+      await paywall.open({ resolveEvent: 'success-purchase' });
+      showWelcomeMessage();
+    } catch (error) {
+      showTrialMessage();
+    }
+  }
+};
+```
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Request API Provider" 
+    href="/docs-v2/paywall-api/make-request"
+  />
+  <Cards.Card 
+    title="Handle Events" 
+    href="/docs-v2/paywall-api/events"
+  />
+  <Cards.Card 
+    title="Abort Requests" 
+    href="/docs-v2/paywall-api/abort-request"
+  />
+</Cards>

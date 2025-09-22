@@ -1,0 +1,142 @@
+import { Callout, Cards, Table, Tabs, Image } from 'nextra/components';
+import {
+  ExclamationTriangleIcon,
+  ChartBarIcon,
+  BookOpenIcon,
+  EyeIcon
+} from '@/components/account/icons';
+
+# Paywall Overview
+
+A paywall serves as an in-app storefront where customers can browse products and make purchases. What sets it apart is its dynamic nature, allowing you to modify it without requiring app updates.
+
+Paywalls provide a seamless way to monetize your application by offering
+products directly within your app interface.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem', maxWidth: '400px' }}>
+  ![Paywall example](/docs/paywall-example.png)
+</div>
+
+## Paywall States
+
+Understanding the different states of your paywall is crucial for effective management and deployment. Each paywall operates under three distinct state categories:
+
+<Cards>
+  <Cards.Card title="Payment States" href="#payment-states" />
+  <Cards.Card title="Visibility States" href="#visibility-states" />
+  <Cards.Card title="Activity States" href="#activity-states" />
+</Cards>
+
+### Payment States
+
+<Tabs
+  items={[
+    { label: 'Test Mode', icon: <ExclamationTriangleIcon /> },
+    { label: 'Live Mode', icon: <EyeIcon /> }
+  ]}
+>
+  <Tabs.Tab>
+    **Test Mode**: These paywalls are in testing mode. Use this state while
+    testing your paywall payments until you are ready to switch to live mode.
+    <Callout type="warning">
+      Always thoroughly test your paywall in test mode before going live to
+      avoid payment issues.
+    </Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Live Mode**: These paywalls are currently live. Use this state after
+    successful testing.
+    <Callout>
+      Live mode processes real payments. Ensure all testing is complete before
+      switching to this mode. You can always switch back to test mode if needed
+      for further testing or debugging.
+    </Callout>
+  </Tabs.Tab>
+</Tabs>
+
+### Visibility States
+
+Control when your users can see and interact with your paywalls in real-time.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>State</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>User Experience</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Visible**</Table.Td>
+      <Table.Td>Default setting. These paywalls are visible to users.</Table.Td>
+      <Table.Td>Users can see and interact with the paywall</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Hidden**</Table.Td>
+      <Table.Td>These paywalls are not visible to users.</Table.Td>
+      <Table.Td>Paywall is completely hidden from users</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout>
+  You can edit visibility settings in real time without requiring app updates.
+</Callout>
+
+### Activity States
+
+Manage the lifecycle of your paywalls through different activity states.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>State</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Actions Available</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Active**</Table.Td>
+      <Table.Td>
+        These paywalls are in the default state when you create or edit them.
+      </Table.Td>
+      <Table.Td>Full editing capabilities, can be hidden/shown</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Archived**</Table.Td>
+      <Table.Td>
+        These paywalls are no longer in use and have been archived.
+      </Table.Td>
+      <Table.Td>Read-only, contact support to restore</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  You can restore archived paywalls by contacting the support team.
+</Callout>
+
+## Key Features
+
+- **Dynamic Updates**: Modify paywall content without main app updates
+- **Real-time Control**: Change visibility and settings instantly
+- **Test Environment**: Safe testing with Stripe/Paddle test mode
+- **Flexible States**: Multiple state management for different use cases
+- **Server Mode**: Client-side control over paywall appearance while our service provides payment API and webhooks
+
+## Next Steps
+
+Now that you understand paywall states, you can:
+
+<Cards>
+  <Cards.Card
+    title="Create Your First Paywall"
+    href="/docs-v2/paywall/create-paywall"
+  />
+  <Cards.Card
+    title="Create Payment Processor"
+    href="/docs-v2/payment-processor/create-payment-processor"
+  />
+</Cards>

@@ -1,0 +1,108 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs
+} from 'nextra/components';
+
+# Connect Offer to Paywall
+
+Learn how to connect discount offers to your paywalls and manage offer assignments for optimal campaign performance.
+
+## Overview
+
+Once you've created an offer, you need to connect it to specific paywalls where it should appear. The offer connection system allows you to:
+
+- **Assign one offer per paywall** for focused campaigns
+- **Switch between offers** without affecting other paywalls
+
+<Callout type="info">
+  **One Offer Limit:** Each paywall can have only one active offer at a time. This ensures a clear, focused user experience without competing messages.
+</Callout>
+
+## How Offer Connection Works
+
+### Offer Assignment Process
+
+<Steps>
+### Access Offer Manager
+
+Navigate to your paywall settings and click on the **"Offer manager"** button.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+    ![Paywall offer manager](/docs/offer-manager.jpg)
+</div>
+
+### Apply Selection
+
+Select an offer and save. The system will:
+
+- **Remove** any previously connected offer
+- **Connect** the new offer to the paywall
+- **Activate** the offer immediately
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+    ![Paywall offer manager save](/docs/offer-manager-save.jpg)
+</div>
+
+</Steps>
+
+## Connection Management
+
+### Single Offer Limitation
+
+<Callout type="warning">
+  **Important:** Only one offer can be active per paywall at any time. Connecting a new offer will automatically disconnect the previous one.
+</Callout>
+
+## Connection States
+
+### Offer Connection Lifecycle
+
+<Steps>
+    ### Created
+    - Offer exists but not connected to any paywall
+    - Available for connection
+    - No impact on user experience
+
+    ### Connected
+
+    - Offer linked to specific paywall(s)
+    - Ready to be displayed to users
+    - Targeting rules apply
+
+    ### Active
+
+    - Offer currently showing to targeted users
+    - Timer running (if duration-based)
+    - Conversion tracking active
+
+    <Callout type="info">
+      **Duration-based Offers:** For duration-based offers, the start time is stored on the client side.
+    </Callout>
+
+    ### Expired
+
+    - Timer has reached zero or end date passed
+    - No longer shown to users
+    - Connection remains for historical data
+
+</Steps>
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Create Offer" 
+    href="/docs-v2/offers/create-offer"
+  />
+  <Cards.Card 
+    title="Paywall Analytics" 
+    href="/docs-v2/analytics/summary"
+  />
+  <Cards.Card 
+    title="Paywall Settings" 
+    href="/docs-v2/paywall/create-paywall"
+  />
+</Cards>

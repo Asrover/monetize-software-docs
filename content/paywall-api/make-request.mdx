@@ -1,0 +1,262 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs,
+  Accordion
+} from 'nextra/components';
+
+# Make API Provider Request
+
+<Callout type="warning">
+  This API only available when paywall is in client mode and has tokenization enabled. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+</Callout>
+
+Learn how to make requests to your configured API providers using the paywall client SDK. This allows you to call external APIs while automatically handling authentication, token deduction, and usage tracking.
+
+<Callout type="info">
+  **Prerequisites:** You must have an [API provider created](/docs-v2/api-provider/create-api-provider) before making requests. API providers handle the connection to external APIs and token deduction.
+</Callout>
+
+## Overview
+
+The paywall SDK provides two methods for making API requests:
+
+- **`paywall.makeRequest()`** - For standard API calls with immediate response
+- **`paywall.makeStreamRequest()`** - For streaming API calls (Server-Sent Events)
+
+Both methods automatically:
+
+- **Authenticate users** - Verify user login status
+- **Check token balance** - Ensure sufficient tokens are available
+- **Deduct tokens** - Charge based on API provider configuration
+- **Forward requests** - Send requests to the configured API endpoint
+- **Handle errors** - Return appropriate error messages
+
+## URL Structure
+
+All API provider requests use this URL format:
+
+```
+https://onlineapp.pro/api/v1/api-gateway/{API_PROVIDER_ID}?paywall_id={PAYWALL_ID}
+```
+
+### Parameters
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Parameter</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Example</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**API_PROVIDER_ID**</Table.Td>
+      <Table.Td>ID of your configured API provider</Table.Td>
+      <Table.Td>999</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**PAYWALL_ID**</Table.Td>
+      <Table.Td>Your paywall identifier</Table.Td>
+      <Table.Td>100</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Standard API Requests
+
+Use `paywall.makeRequest()` for standard API calls:
+
+```javascript
+const response = await paywall.makeRequest(
+  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+  {
+    method: 'POST',
+    body: JSON.stringify({
+      messages: [
+        { role: "user", content: "Hello, how are you?" }
+      ]
+    })
+  }
+);
+
+const data = await response.json();
+console.log(data);
+```
+
+## Streaming API Requests
+
+Use `paywall.makeStreamRequest()` for streaming responses:
+
+```javascript
+const requestUrl = "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=197&test_mode=1";
+let answer = "";
+
+for await (const chunk of paywall.makeStreamRequest(requestUrl, {
+  method: 'POST',
+  body: JSON.stringify({
+    messages: [
+      { role: "user", content: "Tell me a story" }
+    ],
+    stream: true
+  })
+})) {
+  try {
+    const lines = chunk
+      .split('\n')
+      .filter((line) => line.startsWith('data: '));
+
+    lines.forEach((line) => {
+      const data = line.replace('data: ', '').trim();
+
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.choices && parsed.choices[0].delta.content) {
+          answer += parsed.choices[0].delta.content;
+          console.log('Current answer:', answer);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse chunk:', parseError);
+      }
+    });
+  } catch (error) {
+    console.error('Failed to process chunk:', error);
+  }
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+<Callout type="warning">
+  **Authentication Required:** If the user is not authenticated, these methods return `Unauthorized` error.
+</Callout>
+
+<Callout type="warning">
+  **Insufficient Tokens:** If users' queries have run out, it will return a `not-enough-queries` error.
+</Callout>
+
+### Error Responses
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Error</Table.Th>
+      <Table.Th>Description</Table.Th>
+      <Table.Th>Solution</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**access-denied**</Table.Td>
+      <Table.Td>User not authenticated</Table.Td>
+      <Table.Td>Call `paywall.open()` to authenticate</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**not-enough-queries**</Table.Td>
+      <Table.Td>Insufficient tokens</Table.Td>
+      <Table.Td>Call `paywall.renew()` to renew subscription and deposit tokens.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Handling Errors
+
+```javascript
+try {
+  const response = await paywall.makeRequest(requestUrl, options);
+
+  if (!response.ok) {
+    const errorData = await response.json();
+
+    if (response.status === 401) {
+      // User not authenticated, calling login window
+      paywall.open();
+    } else if (response.status === 402) {
+      // Not enough tokens
+      paywall.renew();
+    }
+    return;
+  }
+
+  const data = await response.json();
+  console.log('Success:', data);
+
+} catch (error) {
+  console.error('Request failed:', error);
+}
+```
+
+## Complete Example
+
+```javascript
+import { useState } from 'react';
+
+function APIExample() {
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const makeAPICall = async () => {
+    setLoading(true);
+
+    try {
+      const result = await paywall.makeRequest(
+        "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            messages: [
+              { role: "user", content: "Explain React in simple terms" }
+            ]
+          })
+        }
+      );
+
+      if (result.ok) {
+        const data = await result.json();
+        setResponse(data.choices[0].message.content);
+      } else {
+        console.error('API call failed:', result.status);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={makeAPICall} disabled={loading}>
+        {loading ? 'Loading...' : 'Make API Call'}
+      </button>
+      {response && <div>{response}</div>}
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+1. **Always handle authentication errors** - Call `paywall.open()` when users aren't authenticated
+2. **Check token balance** - Handle `not-enough-queries` errors gracefully
+3. **Implement loading states** - Show users when requests are in progress
+4. **Validate responses** - Check API response format matches expectations
+5. **Error recovery** - Provide retry mechanisms for failed requests
+
+## Next Steps
+
+<Cards>
+  <Cards.Card 
+    title="Create API Provider" 
+    href="/docs-v2/api-provider/create-api-provider"
+  />
+  <Cards.Card 
+    title="Handle Events" 
+    href="/docs-v2/paywall-api/events"
+  />
+</Cards>

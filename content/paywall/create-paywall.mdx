@@ -1,0 +1,248 @@
+import { Callout, Cards, Steps, Table, Tabs, Image } from 'nextra/components';
+
+# Creating Paywall
+
+Step-by-step guide to creating and configuring a paywall to monetize your application.
+
+<Steps>
+
+### Step 1: Create New Paywall
+
+Navigate to Paywalls and click the "New Paywall" button.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create paywall](/docs/create-paywall.png)
+</div>
+
+### Step 2: Choose Operating Mode
+
+Select one of two operating modes based on your integration needs:
+
+![Set paywall mode](/docs/set-paywall-mode.png)
+
+<Tabs items={[{ label: 'Client Mode' }, { label: 'Server Mode' }]}>
+  <Tabs.Tab>
+    **Client Mode (Recommended for Quick Start)**
+
+    Your application works through our Client SDK to get ready-made paywalls with our design system that you can customize in the dashboard.
+
+    **How it works:**
+    - Client SDK handles all paywall logic
+    - Ready-made UI components with customizable design
+    - User authentication handled on our side
+    - Minimal integration effort required
+
+    **Best for:**
+    - Quick implementation
+    - Standard use cases
+    - Teams wanting ready-made solutions
+    - Projects with limited frontend resources
+
+    **What you get:**
+    - Pre-built paywall components
+    - Customizable themes and colors
+    - Built-in user management
+    - Real-time preview in dashboard
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Server Mode (For Custom Implementation)**
+
+    We provide server-side API endpoints that you can call from your server, giving you complete control over the user experience and interface.
+
+    **How it works:**
+    - Your server calls our API endpoints (e.g., `start-checkout`)
+    - We act as a middleware between you and payment processors (Stripe/Paddle)
+    - API returns checkout URLs for payment processing
+    - We send webhooks about payment status
+    - You build your own paywall UI and logic
+
+    **Best for:**
+    - Custom user experiences
+    - Complex business logic
+    - Full control over UI/UX
+    - Advanced integrations
+
+    **What you need to build:**
+    - Your own paywall interface
+    - User authentication system
+    - Payment flow handling
+    - Webhook processing
+
+    **More flexibility, more initial setup required**
+
+  </Tabs.Tab>
+</Tabs>
+
+<Callout>
+  **Choose Client Mode** if you want to get started quickly with minimal
+  development effort.
+  **Choose Server Mode** if you need complete control over
+  the user experience and have development resources to build custom interfaces.
+</Callout>
+
+### Step 3: Basic Settings
+
+Fill in the basic paywall information:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Setting</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Paywall name**</Table.Td>
+      <Table.Td>Internal name for management</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Product name on checkout page**</Table.Td>
+      <Table.Td>Product name displayed to users on checkout page</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Paywall title** (only client mode)</Table.Td>
+      <Table.Td>Title displayed to users in paywall</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Support email** (only client mode)</Table.Td>
+      <Table.Td>Contact email for users</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Paywall type** (only client mode)</Table.Td>
+      <Table.Td>Select **"With tokenization"** to limit the number of actions a user can take, requiring them to purchase the plan again if they run out of actions. Before you do this, add the server endpoint whose actions you want to tokenize to API Providers. [Read more](/paywall/tokenization).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Placement** (only client mode)</Table.Td>
+      <Table.Td>Choose where your paywall operates: **Website Mode** works anywhere on the web, including within browser extensions. **Chrome Extension Mode** requires an extension ID and uses Chrome storage instead of cookies for session management.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  **For Chrome Extensions**: Always use **Chrome Extension Mode** when integrating paywalls into browser extensions. This mode provides more reliable session management using Chrome storage instead of cookies, which is essential for extensions that may operate across different domains.
+</Callout>
+
+### Step 4: Pricing Configuration
+
+Add subscription plans with different periods and prices:
+
+![Set paywall pricing](/docs/set-paywall-price.png)
+
+1. **Add Plan**: Click "Add Plan"
+2. **Set Price**: Specify cost
+3. **Choose Period**: week, month, year, lifetime
+4. **Sorting**: Plans are automatically sorted by price
+5. **(Optional) Set Recommended plan**: This plan will display a label next to its price and be selected by default
+
+### Step 5: Additional Settings (Client Mode)
+
+If Client Mode is selected, configure additional parameters to customize your paywall behavior and appearance:
+
+<Accordion>
+  <Accordion.Item title="(Optional) Trial Settings">
+    Configure trial periods to give users a taste of your service before requiring payment.
+
+    **Trial before paywall opened:**
+    - **No trial**: Paywall appears immediately when triggered
+    - **Trial time**: Set hours before paywall appears (e.g., 24 hours after app installation)
+    - **Trial actions**: Set number of free actions before paywall appears (e.g., 5 free uses)
+
+    **Trial after paywall opened:**
+    - **Free trial duration (days)**: Number of days users can access your service for free after providing payment details (0-365 days)
+
+    <Callout type="info">
+      Trial settings help improve user experience by allowing users to experience value before being asked to pay. Time-based trials work well for daily-use apps, while action-based trials are perfect for utility tools.
+    </Callout>
+
+  </Accordion.Item>
+  
+  <Accordion.Item title="(Optional) Targeting">
+    Control where and to whom your paywall is displayed for optimal conversion rates.
+
+    **Geographic Targeting:**
+    - **Countries where paywall is active**: Select specific countries to show the paywall. Useful for region-specific launches or compliance requirements.
+
+    **Device Targeting:**
+    - **Show paywall to macOS users**: Display paywall to macOS users regardless of their country settings.
+
+    <Callout type="info">
+      **Pro Tip**: Enabling macOS targeting often increases revenue by 15-25% as macOS users generally have higher conversion rates and spending power.
+    </Callout>
+
+  </Accordion.Item>
+  
+  <Accordion.Item title="(Optional) Customization">
+    Customize the visual appearance and behavior of your paywall to match your brand.
+
+    **Visual Customization:**
+    - **Brand Color**: Set your primary brand color using hex values (e.g., #3B82F6). Includes a color picker for easy selection.
+    - **Pricing View**: Choose between vertical (default) or horizontal layout for pricing plans
+    - **Features View**: Select between default features display or create custom feature lists
+
+    **Behavior Settings:**
+    - **Allow Close**: Enable/disable the ability for users to close the paywall without making a purchase. User can continue using free features.
+
+    **Custom Features List** (when Custom Features View is selected):
+    - Add up to 5 custom features with names and descriptions
+    - Perfect for highlighting specific benefits of your paid plans
+    - Each feature can have a descriptive subtitle for clarity
+
+    **Custom CSS styles:**
+    - Add custom CSS code to fully personalize your paywall's appearance beyond basic color settings
+    - Maximum size limit: 5KB to ensure fast loading times
+    - Available CSS selectors for targeting specific elements:
+      - `#overlay` - Background overlay behind the paywall modal
+      - `#modal` - Main paywall container/modal window
+      - `#close-button` - Close button (if enabled)
+      - `#title` - Paywall title text
+      - `#subscription-trial-days` - Trial period badge/indicator
+      - `#pricing-wrapper` - Container for pricing plans
+    - Security restrictions: JavaScript, external imports (@import), and unsafe constructs are blocked for security
+    - Perfect for advanced branding: gradients, shadows, custom fonts, animations, and unique layouts
+  </Accordion.Item>
+  
+  <Accordion.Item title="(Optional) Advanced Settings">
+    Configure advanced behavioral settings for enhanced user experience.
+
+    **Checkout Customization:**
+    - **Shop URL on checkout page**: Set the URL users return to when clicking "back to shop" on checkout page. Without this, the checkout page simply closes.
+    - **Success redirect URL**: Define where users are redirected after successful payment completion
+
+    **Tokenized Paywalls** (when tokenization is enabled):
+    - **Sign in title**: Customize the sign-in prompt title for returning users of tokenized paywalls
+    - Default: "Please sign in to continue using our service"
+
+    <Callout type="warning">
+      **Important**: Success redirect URLs should be HTTPS and belong to your domain for security reasons.
+    </Callout>
+
+  </Accordion.Item>
+</Accordion>
+
+### Step 6: Create
+
+After configuring all parameters, click the **"Create Paywall"** button to create your paywall.
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Create paywall button](/docs/paywall-create-click.png)
+</div>
+
+</Steps>
+
+## Next Steps
+
+After creating paywall, you can:
+
+<Cards>
+  <Cards.Card title="Install Client-side SDK" href="/docs-v2/paywall-api/install-paywall" />
+  <Cards.Card title="Create Payment Processor" href="/docs-v2/payment-processor/create-payment-processor" />
+  <Cards.Card title="Create Offers" href="/docs-v2/paywall/customer-portal" />
+</Cards>
+
+## Best Practices
+
+1. **Test Thoroughly**: Always test paywall before switching to Live mode
+2. **Monitor Conversions**: Use built-in analytics for optimization
+3. **Localization**: Configure local prices for different regions
