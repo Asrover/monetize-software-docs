@@ -4,19 +4,23 @@ import {
   Steps,
   Table,
   Tabs,
-  Accordion
-} from 'nextra/components';
+  Accordion,
+} from "nextra/components";
 
 # Make API Provider Request
 
 <Callout type="warning">
-  This API only available when paywall is in client mode and has tokenization enabled. [Learn more](/docs-v2/paywall/tokenization) about paywall tokenization.
+  This API only available when paywall is in client mode and has tokenization
+  enabled. [Learn more](/docs-v2/paywall/tokenization) about paywall
+  tokenization.
 </Callout>
 
 Learn how to make requests to your configured API providers using the paywall client SDK. This allows you to call external APIs while automatically handling authentication, token deduction, and usage tracking.
 
 <Callout type="info">
-  **Prerequisites:** You must have an [API provider created](/docs-v2/api-provider/create-api-provider) before making requests. API providers handle the connection to external APIs and token deduction.
+  **Prerequisites:** You must have an [API provider
+  created](/docs-v2/api-provider/create-api-provider) before making requests.
+  API providers handle the connection to external APIs and token deduction.
 </Callout>
 
 ## Overview
@@ -74,12 +78,10 @@ Use `paywall.makeRequest()` for standard API calls:
 const response = await paywall.makeRequest(
   "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
   {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify({
-      messages: [
-        { role: "user", content: "Hello, how are you?" }
-      ]
-    })
+      messages: [{ role: "user", content: "Hello, how are you?" }],
+    }),
   }
 );
 
@@ -87,43 +89,107 @@ const data = await response.json();
 console.log(data);
 ```
 
+## Multipart/Form-Data (File Uploads)
+
+When you need to upload files, call `paywall.makeRequest()` in FormData mode. Do not set the `Content-Type` header yourself; the browser will set the correct boundary.
+
+```javascript
+// Single file upload with additional fields (if needed)
+const file = document.querySelector("#file-input").files?.[0];
+if (!file) {
+  throw new Error("Select a file before sending");
+}
+
+const response = await paywall.makeRequest(
+  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+  {
+    method: "POST",
+    // Do NOT set Content-Type: multipart/form-data — the browser will set it
+    body: {
+      file, // File object (e.g., from <input type="file" />)
+      // You can add extra fields as simple key/value pairs:
+      // userId: '123',
+      // metadata: JSON.stringify({ foo: 'bar' })
+    },
+  },
+  undefined,
+  true // enable FormData mode
+);
+
+const data = await response.json();
+console.log(data);
+```
+
+```javascript
+// React example
+import { useRef, useState } from "react";
+
+function UploadExample() {
+  const inputRef = useRef(null);
+  const [result, setResult] = useState(null);
+
+  const onUpload = async () => {
+    const file = inputRef.current?.files?.[0];
+    if (!file) return alert("Select a file before sending");
+
+    const res = await paywall.makeRequest(
+      "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+      {
+        method: "POST",
+        body: { file },
+      },
+      undefined,
+      true
+    );
+
+    const json = await res.json();
+    setResult(json);
+  };
+
+  return (
+    <div>
+      <input id="file-input" ref={inputRef} type="file" />
+      <button onClick={onUpload}>Upload</button>
+      {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
+    </div>
+  );
+}
+```
+
 ## Streaming API Requests
 
 Use `paywall.makeStreamRequest()` for streaming responses:
 
 ```javascript
-const requestUrl = "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=197&test_mode=1";
+const requestUrl =
+  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=197&test_mode=1";
 let answer = "";
 
 for await (const chunk of paywall.makeStreamRequest(requestUrl, {
-  method: 'POST',
+  method: "POST",
   body: JSON.stringify({
-    messages: [
-      { role: "user", content: "Tell me a story" }
-    ],
-    stream: true
-  })
+    messages: [{ role: "user", content: "Tell me a story" }],
+    stream: true,
+  }),
 })) {
   try {
-    const lines = chunk
-      .split('\n')
-      .filter((line) => line.startsWith('data: '));
+    const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
 
     lines.forEach((line) => {
-      const data = line.replace('data: ', '').trim();
+      const data = line.replace("data: ", "").trim();
 
       try {
         const parsed = JSON.parse(data);
         if (parsed.choices && parsed.choices[0].delta.content) {
           answer += parsed.choices[0].delta.content;
-          console.log('Current answer:', answer);
+          console.log("Current answer:", answer);
         }
       } catch (parseError) {
-        console.error('Failed to parse chunk:', parseError);
+        console.error("Failed to parse chunk:", parseError);
       }
     });
   } catch (error) {
-    console.error('Failed to process chunk:', error);
+    console.error("Failed to process chunk:", error);
   }
 }
 ```
@@ -133,11 +199,13 @@ for await (const chunk of paywall.makeStreamRequest(requestUrl, {
 ### Common Errors
 
 <Callout type="warning">
-  **Authentication Required:** If the user is not authenticated, these methods return `Unauthorized` error.
+  **Authentication Required:** If the user is not authenticated, these methods
+  return `Unauthorized` error.
 </Callout>
 
 <Callout type="warning">
-  **Insufficient Tokens:** If users' queries have run out, it will return a `not-enough-queries` error.
+  **Insufficient Tokens:** If users' queries have run out, it will return a
+  `not-enough-queries` error.
 </Callout>
 
 ### Error Responses
@@ -159,7 +227,9 @@ for await (const chunk of paywall.makeStreamRequest(requestUrl, {
     <Table.Tr>
       <Table.Td>**not-enough-queries**</Table.Td>
       <Table.Td>Insufficient tokens</Table.Td>
-      <Table.Td>Call `paywall.renew()` to renew subscription and deposit tokens.</Table.Td>
+      <Table.Td>
+        Call `paywall.renew()` to renew subscription and deposit tokens.
+      </Table.Td>
     </Table.Tr>
   </tbody>
 </Table>
@@ -184,20 +254,19 @@ try {
   }
 
   const data = await response.json();
-  console.log('Success:', data);
-
+  console.log("Success:", data);
 } catch (error) {
-  console.error('Request failed:', error);
+  console.error("Request failed:", error);
 }
 ```
 
 ## Complete Example
 
 ```javascript
-import { useState } from 'react';
+import { useState } from "react";
 
 function APIExample() {
-  const [response, setResponse] = useState('');
+  const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
 
   const makeAPICall = async () => {
@@ -207,12 +276,12 @@ function APIExample() {
       const result = await paywall.makeRequest(
         "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
         {
-          method: 'POST',
+          method: "POST",
           body: JSON.stringify({
             messages: [
-              { role: "user", content: "Explain React in simple terms" }
-            ]
-          })
+              { role: "user", content: "Explain React in simple terms" },
+            ],
+          }),
         }
       );
 
@@ -220,10 +289,10 @@ function APIExample() {
         const data = await result.json();
         setResponse(data.choices[0].message.content);
       } else {
-        console.error('API call failed:', result.status);
+        console.error("API call failed:", result.status);
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
     } finally {
       setLoading(false);
     }
@@ -232,7 +301,7 @@ function APIExample() {
   return (
     <div>
       <button onClick={makeAPICall} disabled={loading}>
-        {loading ? 'Loading...' : 'Make API Call'}
+        {loading ? "Loading..." : "Make API Call"}
       </button>
       {response && <div>{response}</div>}
     </div>
@@ -251,12 +320,9 @@ function APIExample() {
 ## Next Steps
 
 <Cards>
-  <Cards.Card 
-    title="Create API Provider" 
+  <Cards.Card
+    title="Create API Provider"
     href="/docs-v2/api-provider/create-api-provider"
   />
-  <Cards.Card 
-    title="Handle Events" 
-    href="/docs-v2/paywall-api/events"
-  />
+  <Cards.Card title="Handle Events" href="/docs-v2/paywall-api/events" />
 </Cards>
