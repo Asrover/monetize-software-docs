@@ -46,6 +46,11 @@ All API provider requests use this URL format:
 https://onlineapp.pro/api/v1/api-gateway/{API_PROVIDER_ID}?paywall_id={PAYWALL_ID}
 ```
 
+<Callout type="info">
+  If you are using a custom domain, make sure to replace "onlineapp.pro" with
+  your domain in the request URL, otherwise authentication will not work.
+</Callout>
+
 ### Parameters
 
 <Table>
@@ -87,73 +92,6 @@ const response = await paywall.makeRequest(
 
 const data = await response.json();
 console.log(data);
-```
-
-## Multipart/Form-Data (File Uploads)
-
-When you need to upload files, call `paywall.makeRequest()` in FormData mode. Do not set the `Content-Type` header yourself; the browser will set the correct boundary.
-
-```javascript
-// Single file upload with additional fields (if needed)
-const file = document.querySelector("#file-input").files?.[0];
-if (!file) {
-  throw new Error("Select a file before sending");
-}
-
-const response = await paywall.makeRequest(
-  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
-  {
-    method: "POST",
-    // Do NOT set Content-Type: multipart/form-data — the browser will set it
-    body: {
-      file, // File object (e.g., from <input type="file" />)
-      // You can add extra fields as simple key/value pairs:
-      // userId: '123',
-      // metadata: JSON.stringify({ foo: 'bar' })
-    },
-  },
-  undefined,
-  true // enable FormData mode
-);
-
-const data = await response.json();
-console.log(data);
-```
-
-```javascript
-// React example
-import { useRef, useState } from "react";
-
-function UploadExample() {
-  const inputRef = useRef(null);
-  const [result, setResult] = useState(null);
-
-  const onUpload = async () => {
-    const file = inputRef.current?.files?.[0];
-    if (!file) return alert("Select a file before sending");
-
-    const res = await paywall.makeRequest(
-      "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
-      {
-        method: "POST",
-        body: { file },
-      },
-      undefined,
-      true
-    );
-
-    const json = await res.json();
-    setResult(json);
-  };
-
-  return (
-    <div>
-      <input id="file-input" ref={inputRef} type="file" />
-      <button onClick={onUpload}>Upload</button>
-      {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
-    </div>
-  );
-}
 ```
 
 ## Streaming API Requests
