@@ -1,4 +1,4 @@
-import { Steps, Cards, Callout, Tabs } from 'nextra/components';
+import { Steps, Cards, Callout, Tabs } from "nextra/components";
 
 # Quickstart
 
@@ -6,9 +6,9 @@ Start monetizing your application in 10 minutes. Choose the right SDK and follow
 
 ## Choose the Right SDK
 
-The platform provides two main integration approaches:
+The platform provides three integration approaches to suit your needs:
 
-<Tabs items={['Client-Side SDK', 'Server-Side SDK']}>
+<Tabs items={['Client mode', 'Server mode', 'Hybrid Mode']}>
   <Tabs.Tab>
     **Client-Side SDK - Recommended for Quick Start**
 
@@ -24,6 +24,7 @@ The platform provides two main integration approaches:
     - Chrome extensions
     - MVPs and rapid prototypes
     - Teams with limited frontend resources
+
   </Tabs.Tab>
   <Tabs.Tab>
     **Server-Side SDK - For Custom Solutions**
@@ -43,6 +44,25 @@ The platform provides two main integration approaches:
      <Callout type="warning">
       **Requires more work:** You need to build your own interfaces and authentication logic.
     </Callout>
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Hybrid Mode - Best of Both Worlds**
+
+    🔄 **Advantages:**
+    - Client SDK's ready UI components
+    - Server-side business logic control
+    - Flexible request routing
+    - Enhanced security
+    - Custom authentication support
+
+    💪 **Perfect for:**
+    - Enterprise applications
+    - High-security requirements
+    - Complex validation rules
+    - Custom backend integration
+    - Teams wanting UI flexibility with backend control
+
   </Tabs.Tab>
 </Tabs>
 
@@ -51,18 +71,18 @@ The platform provides two main integration approaches:
 ## Check out for our guides
 
 <Cards>
-  <Cards.Card 
-    title="Creating SaaS Subscription" 
+  <Cards.Card
+    title="Creating SaaS Subscription"
     href="/guide/subscription-saas"
     description="Complete guide to setting up a subscription model for your SaaS product. Perfect for beginners."
   />
-  <Cards.Card 
-    title="AI Chat with Pay-per-Request" 
+  <Cards.Card
+    title="AI Chat with Pay-per-Request"
     href="/guide/ai-chat"
     description="Step-by-step guide to creating an AI chat with token-based monetization and fair cost distribution."
   />
-  <Cards.Card 
-    title="Existing Service Integration" 
+  <Cards.Card
+    title="Existing Service Integration"
     href="/guide/existing-service-integration"
     description="Advanced guide to integrating monetize.software with your existing application using server-side SDK."
   />
@@ -114,8 +134,8 @@ Get a working paywall in 5 minutes with ready-made components.
 
 ```html
 <script>
-// Your unique script will be here
-// Copy the exact script from the dashboard
+  // Your unique script will be here
+  // Copy the exact script from the dashboard
 </script>
 ```
 
@@ -138,7 +158,7 @@ if (userInfo.paid) {
 }
 
 // Check token balance (for tokenized paywalls)
-const tokens = userInfo.balances.find(b => b.type === 'standard');
+const tokens = userInfo.balances.find((b) => b.type === "standard");
 if (tokens && tokens.count > 0) {
   // User has tokens
   allowAction();
@@ -159,19 +179,19 @@ document.addEventListener('DOMContentLoaded', function() {
     paywall.open();
   });
 
-  // Check user status on page load
-  checkUserStatus();
+// Check user status on page load
+checkUserStatus();
 });
 
 async function checkUserStatus() {
-  try {
-    const userInfo = await paywall.getUser();
-    if (userInfo.paid) {
-      document.body.classList.add('premium-user');
-    }
-  } catch (error) {
-    console.log('User not authenticated');
-  }
+try {
+const userInfo = await paywall.getUser();
+if (userInfo.paid) {
+document.body.classList.add('premium-user');
+}
+} catch (error) {
+console.log('User not authenticated');
+}
 }
 
 ````
@@ -285,13 +305,16 @@ Build custom interfaces with full control over UX.
 ```javascript
 // Server function to get prices
 async function getPaywallPrices(paywallId) {
-  const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/prices`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.PAYWALL_API_KEY
+  const response = await fetch(
+    `https://onlineapp.pro/api/v1/paywall/${paywallId}/prices`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.PAYWALL_API_KEY,
+      },
     }
-  });
+  );
 
   const result = await response.json();
   return result.data; // Array of prices
@@ -303,25 +326,28 @@ async function getPaywallPrices(paywallId) {
 ```javascript
 // Server function to create payment
 async function createCheckout(userEmail, priceId, paywallId) {
-  const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/start-checkout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.PAYWALL_API_KEY
-    },
-    body: JSON.stringify({
-      email: userEmail,
-      priceId: priceId,
-      successUrl: 'https://yoursite.com/payment/success',
-      errorUrl: 'https://yoursite.com/payment/error',
-      shopUrl: 'https://yoursite.com/pricing',
-      trial_days: 7, // Optional
-      userMeta: {
-        source: 'website',
-        campaign: 'spring_sale'
-      }
-    })
-  });
+  const response = await fetch(
+    `https://onlineapp.pro/api/v1/paywall/${paywallId}/start-checkout`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.PAYWALL_API_KEY,
+      },
+      body: JSON.stringify({
+        email: userEmail,
+        priceId: priceId,
+        successUrl: "https://yoursite.com/payment/success",
+        errorUrl: "https://yoursite.com/payment/error",
+        shopUrl: "https://yoursite.com/pricing",
+        trial_days: 7, // Optional
+        userMeta: {
+          source: "website",
+          campaign: "spring_sale",
+        },
+      }),
+    }
+  );
 
   return response.json();
 }
@@ -331,37 +357,41 @@ async function createCheckout(userEmail, priceId, paywallId) {
 
 ```javascript
 // Webhook handler for payment tracking
-app.post('/webhook/paywall', express.raw({type: 'application/json'}), (req, res) => {
-  const event = req.body;
+app.post(
+  "/webhook/paywall",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const event = req.body;
 
-  switch (event.type) {
-    case 'payment.completed':
-      // User successfully paid
-      console.log('Payment completed:', event.data);
-      activateUserSubscription(event.data.user.id);
-      break;
+    switch (event.type) {
+      case "payment.completed":
+        // User successfully paid
+        console.log("Payment completed:", event.data);
+        activateUserSubscription(event.data.user.id);
+        break;
 
-    case 'refund.created':
-      // Refund created
-      console.log('Refund created:', event.data);
-      handleRefund(event.data.user.id);
-      break;
+      case "refund.created":
+        // Refund created
+        console.log("Refund created:", event.data);
+        handleRefund(event.data.user.id);
+        break;
 
-    case 'subscription.cancelled':
-      // Subscription cancelled
-      deactivateUserSubscription(event.data.user.id);
-      break;
+      case "subscription.cancelled":
+        // Subscription cancelled
+        deactivateUserSubscription(event.data.user.id);
+        break;
+    }
+
+    res.json({ received: true });
   }
-
-  res.json({received: true});
-});
+);
 ```
 
 ### Step 6: Create Interface
 
 ```javascript
 // Example React component for pricing page
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 function PricingPage() {
   const [prices, setPrices] = useState([]);
@@ -369,8 +399,8 @@ function PricingPage() {
 
   useEffect(() => {
     // Load prices from server
-    fetch('/api/prices')
-      .then(res => res.json())
+    fetch("/api/prices")
+      .then((res) => res.json())
       .then(setPrices);
   }, []);
 
@@ -378,14 +408,14 @@ function PricingPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           priceId,
           email: userEmail, // From your authentication system
-          planName
-        })
+          planName,
+        }),
       });
 
       const data = await response.json();
@@ -394,7 +424,7 @@ function PricingPage() {
         window.location.href = data.checkoutUrl;
       }
     } catch (error) {
-      console.error('Checkout creation error:', error);
+      console.error("Checkout creation error:", error);
     } finally {
       setLoading(false);
     }
@@ -404,15 +434,17 @@ function PricingPage() {
     <div className="pricing-page">
       <h1>Choose a Plan</h1>
       <div className="pricing-grid">
-        {prices.map(price => (
+        {prices.map((price) => (
           <div key={price.id} className="pricing-card">
             <h3>{price.interval} plan</h3>
             <p className="price">${price.unit_amount}</p>
             <button
-              onClick={() => handleSubscribe(price.id, `${price.interval} plan`)}
+              onClick={() =>
+                handleSubscribe(price.id, `${price.interval} plan`)
+              }
               disabled={loading}
             >
-              {loading ? 'Creating...' : 'Choose Plan'}
+              {loading ? "Creating..." : "Choose Plan"}
             </button>
           </div>
         ))}
@@ -438,49 +470,51 @@ const API_KEY = process.env.PAYWALL_API_KEY;
 
 // Get prices
 router.get('/prices', async (req, res) => {
-  try {
-    const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${PAYWALL_ID}/prices`, {
-      headers: {
-        'x-api-key': API_KEY
-      }
-    });
+try {
+const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${PAYWALL_ID}/prices`, {
+headers: {
+'x-api-key': API_KEY
+}
+});
 
     const result = await response.json();
     res.json(result.data);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch prices' });
-  }
+
+} catch (error) {
+res.status(500).json({ error: 'Failed to fetch prices' });
+}
 });
 
 // Create checkout
 router.post('/create-checkout', async (req, res) => {
-  const { email, priceId, planName } = req.body;
+const { email, priceId, planName } = req.body;
 
-  try {
-    const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${PAYWALL_ID}/start-checkout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-      },
-      body: JSON.stringify({
-        email,
-        priceId,
-        successUrl: `${req.protocol}://${req.get('host')}/payment/success`,
-        errorUrl: `${req.protocol}://${req.get('host')}/payment/error`,
-        shopUrl: `${req.protocol}://${req.get('host')}/pricing`,
-        userMeta: {
-          planName,
-          source: 'website'
-        }
-      })
-    });
+try {
+const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${PAYWALL_ID}/start-checkout`, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+'x-api-key': API_KEY
+},
+body: JSON.stringify({
+email,
+priceId,
+successUrl: `${req.protocol}://${req.get('host')}/payment/success`,
+errorUrl: `${req.protocol}://${req.get('host')}/payment/error`,
+shopUrl: `${req.protocol}://${req.get('host')}/pricing`,
+userMeta: {
+planName,
+source: 'website'
+}
+})
+});
 
     const result = await response.json();
     res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create checkout' });
-  }
+
+} catch (error) {
+res.status(500).json({ error: 'Failed to create checkout' });
+}
 });
 
 module.exports = router;
@@ -561,19 +595,19 @@ class PaywallIntegration {
     this.apiBaseUrl = apiBaseUrl;
   }
 
-  async loadPrices() {
-    const response = await fetch(`${this.apiBaseUrl}/api/prices`);
-    return response.json();
-  }
+async loadPrices() {
+const response = await fetch(`${this.apiBaseUrl}/api/prices`);
+return response.json();
+}
 
-  async createCheckout(email, priceId, planName) {
-    const response = await fetch(`${this.apiBaseUrl}/api/create-checkout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, priceId, planName })
-    });
+async createCheckout(email, priceId, planName) {
+const response = await fetch(`${this.apiBaseUrl}/api/create-checkout`, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json'
+},
+body: JSON.stringify({ email, priceId, planName })
+});
 
     const result = await response.json();
 
@@ -582,10 +616,11 @@ class PaywallIntegration {
     } else {
       throw new Error(result.error || 'Failed to create checkout');
     }
-  }
 
-  renderPricingTable(containerId) {
-    const container = document.getElementById(containerId);
+}
+
+renderPricingTable(containerId) {
+const container = document.getElementById(containerId);
 
     this.loadPrices().then(prices => {
       container.innerHTML = prices.map(price => `
@@ -598,10 +633,11 @@ class PaywallIntegration {
         </div>
       `).join('');
     });
-  }
 
-  async subscribe(priceId, planName) {
-    const email = this.getCurrentUserEmail(); // Your email getting logic
+}
+
+async subscribe(priceId, planName) {
+const email = this.getCurrentUserEmail(); // Your email getting logic
 
     if (!email) {
       alert('Please sign in to continue');
@@ -613,16 +649,171 @@ class PaywallIntegration {
     } catch (error) {
       alert('Payment creation error: ' + error.message);
     }
-  }
+
+}
 }
 
 // Usage
 const paywall = new PaywallIntegration('https://yoursite.com');
 paywall.renderPricingTable('pricing-container');
 
-```
+````
   </Tabs.Tab>
 </Tabs>
+
+## Hybrid Mode
+
+Build a flexible solution combining client-side UI with your server-side business logic.
+
+<Steps>
+
+### Step 1: Create Paywall in Hybrid Mode
+
+1. Log into the dashboard
+2. Create a new paywall, selecting **"Hybrid Mode"**
+3. Configure basic information and pricing
+4. Create and connect payment processor
+
+### Step 2: Configure Server SDK Endpoints
+
+1. Set up your server endpoints that will handle paywall requests
+2. Configure the following in paywall settings:
+   - API base URL for your server
+   - Endpoints mapping for specific operations
+
+### Step 3: Install Client SDK
+
+```html
+<script>
+// Your unique script will be here
+// Copy the exact script from the dashboard
+</script>
+````
+
+### Step 4: Handle Client SDK Events
+
+```javascript
+// Listen for paywall events
+window.addEventListener("message", (event) => {
+  if (event.data.type === "PAYWALL_EVENT") {
+    const { event: eventType, payload } = event.data;
+
+    switch (eventType) {
+      case "purchase":
+        // Handle purchase event
+        handlePurchase(payload);
+        break;
+      case "restore":
+        // Handle restore subscription
+        handleRestore(payload);
+        break;
+      case "sign-out":
+        // Handle sign out
+        handleSignOut(payload);
+        break;
+    }
+  }
+});
+
+// Initialize paywall with user email (optional)
+paywall.open({
+  email: "user@example.com", // Pre-fill email for authentication
+});
+
+// Example payload structure for purchase event:
+// {
+//   paywallId: "wall_123",
+//   priceId: 456,
+//   priceCents: 1000,
+//   currency: "USD",
+//   interval: "month",
+//   localPriceCents: 1000,
+//   offerId: "offer_789"
+// }
+```
+
+### Example Server Implementation
+
+```javascript
+// Server-side purchase handler
+async function handlePurchase(payload) {
+  const { paywallId, priceId, offerId } = payload;
+
+  try {
+    // Call your server endpoint
+    const response = await fetch("/api/process-purchase", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    // Your server uses Server SDK to process purchase
+    const result = await response.json();
+
+    if (result.success) {
+      // Purchase successful
+      showSuccessMessage();
+    }
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+// Server endpoint using Server SDK
+app.post("/api/process-purchase", async (req, res) => {
+  const { priceId, offerId } = req.body;
+
+  try {
+    // Use Server SDK to process purchase
+    const result = await fetch(
+      "https://onlineapp.pro/api/v1/paywall/PAYWALL_ID/start-checkout",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          paywallId,
+          priceId,
+          offerId,
+        }),
+      }
+    );
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Purchase processing failed",
+    });
+  }
+});
+```
+
+</Steps>
+
+### Key Benefits of Hybrid Mode
+
+✨ **Perfect Balance:**
+
+- Ready-made UI components from Client SDK
+- Custom business logic with Server SDK
+- Automatic user session management
+- Secure server-side validations
+
+🔄 **Flexible Integration:**
+
+- Route specific operations to your server
+- Keep sensitive logic server-side
+- Utilize built-in UI when needed
+- Custom authentication support
+
+🛡️ **Enhanced Security:**
+
+- Critical operations on your server
+- Token validation server-side
+- Custom access rules
+- Fraud prevention
 
 ## Useful Links
 
@@ -632,5 +823,6 @@ paywall.renderPricingTable('pricing-container');
 - **Payment Processors:** [Stripe/Paddle Setup](/docs-v2/payment-processor/create-payment-processor)
 
 <Callout type="info">
-  **Need help?** Join our [Telegram community](https://t.me/monetize_software_ru) or contact support.
+  **Need help?** Join our [Telegram
+  community](https://t.me/monetize_software_ru) or contact support.
 </Callout>
