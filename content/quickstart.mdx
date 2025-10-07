@@ -52,16 +52,14 @@ The platform provides three integration approaches to suit your needs:
     🔄 **Advantages:**
     - Client SDK's ready UI components
     - Server-side business logic control
-    - Flexible request routing
-    - Enhanced security
-    - Custom authentication support
 
     💪 **Perfect for:**
-    - Enterprise applications
-    - High-security requirements
-    - Complex validation rules
     - Custom backend integration
     - Teams wanting UI flexibility with backend control
+
+     <Callout type="warning">
+      **Requires more work:** You need to build authentication logic.
+    </Callout>
 
   </Tabs.Tab>
 </Tabs>
@@ -73,17 +71,17 @@ The platform provides three integration approaches to suit your needs:
 <Cards>
   <Cards.Card
     title="Creating SaaS Subscription"
-    href="/guide/subscription-saas"
+    href="/docs-v2/guide/subscription-saas"
     description="Complete guide to setting up a subscription model for your SaaS product. Perfect for beginners."
   />
   <Cards.Card
     title="AI Chat with Pay-per-Request"
-    href="/guide/ai-chat"
+    href="/docs-v2/guide/ai-chat"
     description="Step-by-step guide to creating an AI chat with token-based monetization and fair cost distribution."
   />
   <Cards.Card
     title="Existing Service Integration"
-    href="/guide/existing-service-integration"
+    href="/docs-v2/guide/existing-service-integration"
     description="Advanced guide to integrating monetize.software with your existing application using server-side SDK."
   />
 </Cards>
@@ -509,15 +507,13 @@ source: 'website'
 })
 });
 
-    const result = await response.json();
-    res.json(result);
+const result = await response.json();
+res.json(result);
 
 } catch (error) {
 res.status(500).json({ error: 'Failed to create checkout' });
 }
 });
-
-module.exports = router;
 
 ````
   </Tabs.Tab>
@@ -798,22 +794,6 @@ app.post("/api/process-purchase", async (req, res) => {
 
 - Ready-made UI components from Client SDK
 - Custom business logic with Server SDK
-- Automatic user session management
-- Secure server-side validations
-
-🔄 **Flexible Integration:**
-
-- Route specific operations to your server
-- Keep sensitive logic server-side
-- Utilize built-in UI when needed
-- Custom authentication support
-
-🛡️ **Enhanced Security:**
-
-- Critical operations on your server
-- Token validation server-side
-- Custom access rules
-- Fraud prevention
 
 ## Useful Links
 
