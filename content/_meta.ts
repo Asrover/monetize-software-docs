@@ -1,18 +1,19 @@
 export default {
-  index: 'Introduction',
-  quickstart: 'Quickstart',
-  paywall: 'Paywalls',
-  'paywall-api': {
-    title: 'Paywall Client-Side SDK'
+  index: "Introduction",
+  quickstart: "Quickstart",
+  paywall: "Paywalls",
+  "paywall-api": {
+    title: "Paywall Client-Side SDK",
   },
-  'server-side-sdk': 'Paywall Server-Side SDK',
-  'payment-processor': 'Payment Processor',
-  'api-provider': 'API Provider',
-  'custom-domains': 'Custom Domains',
-  webhooks: 'Webhooks',
-  guide: 'Guide',
-  offers: 'Offers',
-  faq: 'FAQ',
+  hybrid: "Hybrid",
+  "server-side-sdk": "Paywall Server-Side SDK",
+  "payment-processor": "Payment Processor",
+  "api-provider": "API Provider",
+  "custom-domains": "Custom Domains",
+  webhooks: "Webhooks",
+  guide: "Guide",
+  offers: "Offers",
+  faq: "FAQ",
   // 'index': {
   //   title: 'Documentation',
   //   type: 'page',
@@ -20,8 +21,8 @@ export default {
   // },
   // analytics: 'Analytics',
   roadmap: {
-    title: 'Roadmap',
-    type: 'page',
-    href: 'https://monetizesoftware.featurebase.app/en'
-  }
+    title: "Roadmap",
+    type: "page",
+    href: "https://monetizesoftware.featurebase.app/en",
+  },
 };

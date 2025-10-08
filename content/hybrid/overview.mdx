@@ -1,0 +1,198 @@
+import { Callout, Cards, Steps, Tabs, Image } from "nextra/components";
+
+# Hybrid Overview
+
+Hybrid mode connects a click action in the paywall to your server handler. This keeps client-side paywall flexibility while moving critical operations (auth checks, input validation, checkout session creation) to your backend.
+
+## How it works
+
+<Steps>
+### Step 1:  User interacts with the paywall
+
+- The paywall sends a `window.postMessage` event with `type: "PAYWALL_EVENT"` and an event-specific payload.
+
+### Step 2: Your frontend listens for the event
+
+- You subscribe to `window.message`, validate `event.origin`, and extract the required parameters.
+
+### Step 3: Your server route handles the request
+
+- The frontend calls your protected server route (for example, `/api/create-checkout`).
+- On the server you verify auth/permissions and validate input.
+
+### Step 4: Call the Server-Side SDK
+
+- The server calls the Server-Side SDK endpoint `start-checkout`, forming the `checkoutUrl` and extra data.
+
+### Step 5: Redirect the user to payment
+
+- The server returns `checkoutUrl` to the frontend, which redirects or opens it in a new tab.
+  </Steps>
+
+## Flow diagram
+
+```text
+User Interaction -> Paywall (purchase/sign-out/restore)
+           -> window.postMessage(PAYWALL_EVENT + payload)
+           -> Frontend Listener (validates origin)
+           -> Call Your API Route (/api/create-checkout)
+           -> Server: auth + validate + call Start Checkout
+           -> Server -> Frontend: checkoutUrl
+           -> Frontend: redirect to checkout
+```
+
+## Subscribe to paywall hybrid mode events
+
+```javascript
+// Safe subscription example
+window.addEventListener("message", function (event) {
+  const allowed = [
+    "https://onlineapp.pro",
+    "https://onlineapp.live",
+    "https://onlineapp.stream",
+  ];
+  if (event.data?.type !== "PAYWALL_EVENT" || !allowed.includes(event.origin))
+    return;
+
+  const { event: ev, payload } = event.data || {};
+
+  switch (ev) {
+    case "purchase": {
+      const {
+        priceId,
+        paywallId,
+        priceCents,
+        currency,
+        interval,
+        localPriceCents,
+        offerId,
+      } = payload || {};
+      if (!priceId) return;
+      fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId, paywallId, offerId }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.checkoutUrl) window.location.href = data.checkoutUrl;
+        });
+      break;
+    }
+    case "sign-out": {
+      // Optional: clear local session/state or call your sign-out API
+      break;
+    }
+    case "restore": {
+      // Optional: re-fetch user purchases or refresh UI
+      break;
+    }
+  }
+});
+```
+
+## Event payloads
+
+```typescript
+// Common envelope
+type PaywallEventEnvelope =
+  | { type: "PAYWALL_EVENT"; event: "purchase"; payload: PurchasePayload }
+  | { type: "PAYWALL_EVENT"; event: "sign-out" }
+  | { type: "PAYWALL_EVENT"; event: "restore" };
+
+type PurchasePayload = {
+  paywallId: string;
+  priceId: number; // integer
+  priceCents: number;
+  currency: string; // e.g. 'USD'
+  interval?: "day" | "week" | "month" | "year";
+  localPriceCents?: number;
+  offerId?: string | number;
+};
+```
+
+## Server route (example)
+
+```javascript
+// /api/create-checkout
+import { NextResponse } from "next/server";
+
+export async function POST(req) {
+  try {
+    const { priceId, email, trialDays = 0, userMeta } = await req.json();
+
+    // 1) Auth (example): verify user session/token
+    // const session = await auth(); if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // 2) Input validation
+    if (!priceId)
+      return NextResponse.json(
+        { error: "priceId is required" },
+        { status: 400 }
+      );
+
+    // 3) Call Server-Side SDK Start Checkout
+    const paywallId = "YOUR_PAYWALL_ID";
+    const apiKey = process.env.PAYWALL_API_KEY;
+
+    const response = await fetch(
+      `https://onlineapp.pro/api/v1/paywall/${paywallId}/start-checkout`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          email, // you can pass email from your own user account
+          priceId,
+          trial_days: trialDays,
+          successUrl: "https://mysite.com/payment/success",
+          errorUrl: "https://mysite.com/payment/error",
+          shopUrl: "https://mysite.com/shop",
+          userMeta,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: "Failed to start checkout" },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json({
+      checkoutUrl: data.checkoutUrl,
+      acquiring: data.acquiring,
+      userId: data.userId,
+    });
+  } catch (e) {
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+```
+
+<Callout type="info">
+  For reliable payment tracking, use `Webhooks` — events are delivered even if
+  the browser window is closed.
+</Callout>
+
+## Best practices
+
+- **Security**: never use `x-api-key` on the client, server only.
+- **Validation**: check `event.origin`, validate inputs before calling Start Checkout.
+- **UX**: show a loader while creating a session and handle errors gracefully.
+
+## Next steps
+
+<Cards>
+  <Cards.Card title="Paywall Events" href="/docs-v2/paywall-api/events" />
+  <Cards.Card
+    title="Start Checkout (Server-Side)"
+    href="/docs-v2/server-side-sdk/start-checkout"
+  />
+  <Cards.Card title="Webhooks" href="/docs-v2/webhooks/events" />
+  <Cards.Card title="Get Prices" href="/docs-v2/server-side-sdk/get-prices" />
+</Cards>
