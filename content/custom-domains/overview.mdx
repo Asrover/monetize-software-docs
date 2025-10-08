@@ -1,8 +1,10 @@
-import {
-  Callout,
-} from 'nextra/components';
+import { Callout } from "nextra/components";
 
 # Custom Domains Overview
+
+<Callout type="warning">
+  This feature only relevant when paywall is in client mode.
+</Callout>
 
 Custom domains allow you to use your own domain for displaying paywalls instead of the standard `onlineapp.pro`. This makes the payment process more trustworthy for your users and improves branding.
 
@@ -11,7 +13,10 @@ Custom domains allow you to use your own domain for displaying paywalls instead 
 A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or `api.yoursite.com`) that will be used to display the paywall. Instead of users seeing `onlineapp.pro` in the address bar, they will see your domain.
 
 <Callout type="info">
-  **Important:** The checkout page itself will open on the domain specified in your payment processor settings and is not related to the custom domain. The custom domain only affects the paywall display and authentication process, not the actual payment process.
+  **Important:** The checkout page itself will open on the domain specified in
+  your payment processor settings and is not related to the custom domain. The
+  custom domain only affects the paywall display and authentication process, not
+  the actual payment process.
 </Callout>
 
 ## Benefits of using custom domains
@@ -21,7 +26,10 @@ A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or 
 **Main problem:** Many browsers block third-party cookies by default. When a paywall loads from the `onlineapp.pro` domain while your site is on a different domain, the browser may block authentication cookies, leading to user login issues.
 
 <Callout type="warning">
-  This issue is **only relevant for SaaS applications and websites**. If you're building a **browser extension**, this problem doesn't apply to you since extensions use Chrome's built-in storage for authentication instead of cookies.
+  This issue is **only relevant for SaaS applications and websites**. If you're
+  building a **browser extension**, this problem doesn't apply to you since
+  extensions use Chrome's built-in storage for authentication instead of
+  cookies.
 </Callout>
 
 **Solution:** Using a custom domain (subdomain of your main site) bypasses these restrictions, as browsers consider subdomains part of the same domain.
@@ -43,11 +51,13 @@ A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or 
 ### Supported domain types
 
 ✅ **Supported:** Third-level subdomains
+
 - `api.yoursite.com`
 - `pay.yoursite.com`
 - `paywall.yoursite.com`
 
 ❌ **Not supported:** Root domains
+
 - `yoursite.com`
 - `www.yoursite.com`
 
