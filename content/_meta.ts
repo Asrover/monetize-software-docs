@@ -5,8 +5,8 @@ export default {
   "paywall-api": {
     title: "Paywall Client-Side SDK",
   },
-  hybrid: "Hybrid",
   "server-side-sdk": "Paywall Server-Side SDK",
+  hybrid: "Hybrid mode",
   "payment-processor": "Payment Processor",
   "api-provider": "API Provider",
   "custom-domains": "Custom Domains",

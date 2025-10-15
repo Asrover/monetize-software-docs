@@ -1,14 +1,12 @@
-import {
-  Callout,
-  Cards,
-  Steps,
-  Table
-} from 'nextra/components';
+import { Callout, Cards, Steps, Table } from "nextra/components";
 
 # Customer Portal
 
 <Callout type="warning">
-  **Server Mode Paywalls:** This documentation is for client mode paywalls only. If your paywall is configured in server mode, you'll need to use the server-side SDK to generate customer portal links. See [Server-Side Customer Portal](/docs-v2/server-side-sdk/get-customer-portal) documentation.
+  **Server Mode Paywalls:** This documentation is for client mode paywalls only.
+  If your paywall is configured in server mode, you'll need to use the
+  server-side SDK to generate customer portal links. See [Server-Side Customer
+  Portal](/docs-v2/server-side-sdk/get-customer-portal) documentation.
 </Callout>
 
 Learn how to provide users with a self-service portal where they can manage their subscriptions, update payment methods, view billing history, and control their account settings.
@@ -23,7 +21,7 @@ The customer portal is a secure, hosted page that allows your subscribers to:
 - **Download receipts** - Get proof of payment for tax purposes
 - **Manage account details** - Update personal information
 
-<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+<div style={{ marginTop: "2rem", marginBottom: "2rem" }}>
   ![Customer portal](/docs/customer-portal.png)
 </div>
 
@@ -51,13 +49,25 @@ If your paywall ID is `100`, the customer portal URL will be:
 https://onlineapp.pro/paywall/100/customer-portal/get
 ```
 
+### Open Support Form via URL
+
+To open the Support form directly when the customer portal loads, append the `tab` query parameter:
+
+- `tab=support` — opens the Support form by default
+
+Example:
+
+```
+https://onlineapp.pro/paywall/100/customer-portal/get?tab=support
+```
+
 <Steps>
 
 ### Step 1: Get Your Paywall ID
 
 Navigate to your paywall settings page and get the ID from the Paywall ID field:
 
-<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+<div style={{ marginTop: "2rem", marginBottom: "2rem" }}>
   ![Paywall ID location](/docs/paywall-id-location.png)
 </div>
 
@@ -135,7 +145,9 @@ For Stripe-powered paywalls, ensure the customer portal is configured:
 3. **Save configuration** - Portal won't work without proper setup
 
 <Callout type="warning">
-  **404 Error Fix:** If you see a 404 error when accessing the customer portal, you need to configure the customer portal settings in your Stripe dashboard: https://dashboard.stripe.com/test/settings/billing/portal
+  **404 Error Fix:** If you see a 404 error when accessing the customer portal,
+  you need to configure the customer portal settings in your Stripe dashboard:
+  https://dashboard.stripe.com/test/settings/billing/portal
 </Callout>
 
 ### Paddle Configuration
@@ -166,7 +178,9 @@ For Paddle-powered paywalls:
     </Table.Tr>
     <Table.Tr>
       <Table.Td>**Cancellation**</Table.Td>
-      <Table.Td>Cancel subscription with options for immediate or end-of-period</Table.Td>
+      <Table.Td>
+        Cancel subscription with options for immediate or end-of-period
+      </Table.Td>
       <Table.Td>Choose cancellation timing</Table.Td>
     </Table.Tr>
     <Table.Tr>
@@ -206,9 +220,9 @@ For Paddle-powered paywalls:
 
 <Accordion>
   <Accordion.Item title="404 Error on Portal Access">
-    - **Cause:** Payment processor portal not configured
-    - **Solution:** Configure customer portal in Stripe/Paddle dashboard
-    - **Verification:** Test portal access after configuration
+    - **Cause:** Payment processor portal not configured - **Solution:**
+    Configure customer portal in Stripe/Paddle dashboard - **Verification:**
+    Test portal access after configuration
   </Accordion.Item>
 </Accordion>
 
@@ -217,16 +231,10 @@ For Paddle-powered paywalls:
 After setting up customer portal access:
 
 <Cards>
-  <Cards.Card 
-    title="Configure Webhooks" 
-    href="/docs-v2/webhooks/overview"
-  />
-  <Cards.Card 
-    title="Monitor Analytics" 
-    href="/docs-v2/analytics/summary"
-  />
-  <Cards.Card 
-    title="Payment Processors" 
+  <Cards.Card title="Configure Webhooks" href="/docs-v2/webhooks/overview" />
+  <Cards.Card title="Monitor Analytics" href="/docs-v2/analytics/summary" />
+  <Cards.Card
+    title="Payment Processors"
     href="/docs-v2/payment-processor/overview"
   />
 </Cards>
