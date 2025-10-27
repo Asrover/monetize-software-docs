@@ -3,9 +3,9 @@ export default {
   quickstart: "Quickstart",
   paywall: "Paywalls",
   "paywall-api": {
-    title: "Paywall Client-Side SDK",
+    title: "Client-Side SDK",
   },
-  "server-side-sdk": "Paywall Server-Side SDK",
+  "server-side-sdk": "Server-Side SDK",
   hybrid: "Hybrid mode",
   "payment-processor": "Payment Processor",
   "api-provider": "API Provider",

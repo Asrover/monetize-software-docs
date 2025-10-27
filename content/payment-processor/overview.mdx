@@ -1,16 +1,10 @@
-import {
-  Callout,
-  Cards,
-  Steps,
-  Table,
-  Tabs
-} from 'nextra/components';
+import { Callout, Cards, Steps, Table, Tabs } from "nextra/components";
 import {
   ExclamationTriangleIcon,
   BookOpenIcon,
-  ChartBarIcon
-} from '@/components/account/icons';
-import Image from 'next/image';
+  ChartBarIcon,
+} from "@/components/account/icons";
+import Image from "next/image";
 
 # Payment Processor Overview
 
@@ -27,7 +21,9 @@ A **Payment Processor** is a secure intermediary service that:
 - **Ensures** PCI compliance and security standards
 
 <Callout>
-  Think of a payment processor as a translator between your application and the complex world of financial transactions. It abstracts away the complexity while maintaining security and reliability.
+  Think of a payment processor as a translator between your application and the
+  complex world of financial transactions. It abstracts away the complexity
+  while maintaining security and reliability.
 </Callout>
 
 ## How It Works
@@ -96,7 +92,9 @@ Main Paywall → Stripe Processor (50% traffic)
 For businesses with multiple companies or those concerned about payment processor blocking, you can configure **multiple payment processors** for a single paywall.
 
 <Callout type="warning">
-  **Why diversify?** Payment processors can sometimes freeze accounts due to policy changes, compliance issues, or false fraud flags. Having multiple processors ensures business continuity.
+  **Why diversify?** Payment processors can sometimes freeze accounts due to
+  policy changes, compliance issues, or false fraud flags. Having multiple
+  processors ensures business continuity.
 </Callout>
 
 ### How Traffic Distribution Works
@@ -143,41 +141,28 @@ When multiple processors are connected to a paywall traffic is automatically spl
 5. **Compliance Alignment**: Ensure all processors meet your compliance requirements
 
 <Callout type="info">
-  **Pro Tip**: Many successful SaaS companies use 2-3 payment processors to balance reliability with management complexity. More isn't always better - focus on quality and reliability of your chosen processors.
+  **Pro Tip**: Many successful SaaS companies use 2-3 payment processors to
+  balance reliability with management complexity. More isn't always better -
+  focus on quality and reliability of your chosen processors.
 </Callout>
 
 ## Supported Payment Systems
 
 Our platform currently supports integration with the following payment systems:
 
-<Tabs items={['Stripe', 'Paddle']}>
+<Tabs items={["Stripe", "Paddle"]}>
   <Tabs.Tab>
-    **Best for:** SaaS, e-commerce, international businesses
-    
-    **Features:**
-    - Global payment method support
-    - Advanced fraud protection
-    - Detailed analytics and reporting
-    - Strong developer tools
-    - Subscription management
-    
-    **Supported modes:** Test and Live
-    **Webhook support:** ✅ Automatic
+    **Best for:** SaaS, e-commerce, international businesses **Features:** -
+    Global payment method support - Advanced fraud protection - Detailed
+    analytics and reporting - Strong developer tools - Subscription management
+    **Supported modes:** Test and Live **Webhook support:** ✅ Automatic
     **Currencies:** 135+ supported
   </Tabs.Tab>
   <Tabs.Tab>
-    **Best for:** Digital products, software, online services
-    
-    **Features:**
-    - Built-in tax compliance
-    - Merchant of record service
-    - Global tax handling
-    - Subscription billing
-    - Recovery tools
-    
-    **Supported modes:** Sandbox and Production
-    **Webhook support:** ✅ Automatic
-    **Tax compliance:** ✅ Global
+    **Best for:** Digital products, software, online services **Features:** -
+    Built-in tax compliance - Merchant of record service - Global tax handling -
+    Subscription billing - Recovery tools **Supported modes:** Sandbox and
+    Production **Webhook support:** ✅ Automatic **Tax compliance:** ✅ Global
   </Tabs.Tab>
 </Tabs>
 
@@ -186,18 +171,15 @@ Our platform currently supports integration with the following payment systems:
 Ready to set up your payment processors? Here's your roadmap:
 
 <Cards>
-  <Cards.Card 
-    title="Create Payment Processor" 
+  <Cards.Card
+    title="Create Payment Processor"
     href="/docs-v2/payment-processor/create-payment-processor"
   />
-  <Cards.Card 
-    title="Connect to Paywall" 
-    href="/docs-v2/paywall/connect-payment-processor"
+  <Cards.Card
+    title="Connect to Paywall"
+    href="/docs-v2/payment-processor/connect-payment-processor"
   />
-  <Cards.Card 
-    title="Configure Webhooks" 
-    href="/docs-v2/webhooks/overview"
-  />
+  <Cards.Card title="Configure Webhooks" href="/docs-v2/webhooks/overview" />
 </Cards>
 
 ## FAQ
@@ -211,9 +193,12 @@ Ready to set up your payment processors? Here's your roadmap:
     You need manually unlink payment processor in payment processor manager.
   </Accordion.Item>
 
-  <Accordion.Item title="How do I know which processor to choose?">
-    Consider your target market, business model, and compliance requirements. Stripe is great for global reach, while Paddle excels at tax compliance for digital products.
-  </Accordion.Item>
+{" "}
+<Accordion.Item title="How do I know which processor to choose?">
+  Consider your target market, business model, and compliance requirements.
+  Stripe is great for global reach, while Paddle excels at tax compliance for
+  digital products.
+</Accordion.Item>
 
   <Accordion.Item title="Is there a limit to how many processors I can connect?">
     While technically unlimited, we recommend 2-3 processors for optimal balance of redundancy and management simplicity.

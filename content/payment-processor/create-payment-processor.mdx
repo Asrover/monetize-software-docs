@@ -1,23 +1,19 @@
-import {
-  Callout,
-  Cards,
-  Steps,
-  Table,
-  Tabs
-} from 'nextra/components';
+import { Callout, Cards, Steps, Table, Tabs } from "nextra/components";
 import {
   ExclamationTriangleIcon,
   BookOpenIcon,
-  ChartBarIcon
-} from '@/components/account/icons';
-import Image from 'next/image';
+  ChartBarIcon,
+} from "@/components/account/icons";
+import Image from "next/image";
 
 # Create Payment Processor
 
 Step-by-step guide to creating and configuring a payment processor for handling payments in your application.
 
 <Callout>
-  **What is a payment processor?** It's an intermediary between your application and payment systems (Stripe/Paddle) that processes transactions and manages subscriptions. [Read mode](/docs-v2/payment-processor/overview)
+  **What is a payment processor?** It's an intermediary between your application
+  and payment systems (Stripe/Paddle) that processes transactions and manages
+  subscriptions. [Read mode](/docs-v2/payment-processor/overview)
 </Callout>
 
 <Steps>
@@ -26,7 +22,7 @@ Step-by-step guide to creating and configuring a payment processor for handling 
 
 Navigate to the "Payment Processors" section and click the "New Payment Processor" button.
 
-<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+<div style={{ marginTop: "2rem", marginBottom: "2rem" }}>
   ![Create payment processor](/docs/pp-create.png)
 </div>
 
@@ -34,40 +30,18 @@ Navigate to the "Payment Processors" section and click the "New Payment Processo
 
 Select one of the supported payment systems:
 
-<Tabs items={['Stripe', 'Paddle']}>
+<Tabs items={["Stripe", "Paddle"]}>
   <Tabs.Tab>
-    **Stripe**
-    
-    Popular payment system with wide support for cards and payment methods.
-    
-    **Advantages:**
-    - Support for most bank cards
-    - Global coverage
-    - Simple integration
-    - Detailed analytics
-    
-    **Best for:**
-    - International projects
-    - SaaS applications
-    - Web services
-    
+    **Stripe** Popular payment system with wide support for cards and payment
+    methods. **Advantages:** - Support for most bank cards - Global coverage -
+    Simple integration - Detailed analytics **Best for:** - International
+    projects - SaaS applications - Web services
   </Tabs.Tab>
   <Tabs.Tab>
-    **Paddle**
-    
-    Payment system specializing in digital products and subscriptions.
-    
-    **Advantages:**
-    - Built-in tax handling
-    - Support for multiple currencies
-    - Specialization in digital goods
-    - Global tax compliance
-    
-    **Best for:**
-    - Digital products
-    - Software
-    - Online courses
-    
+    **Paddle** Payment system specializing in digital products and
+    subscriptions. **Advantages:** - Built-in tax handling - Support for
+    multiple currencies - Specialization in digital goods - Global tax
+    compliance **Best for:** - Digital products - Software - Online courses
   </Tabs.Tab>
 </Tabs>
 
@@ -98,7 +72,8 @@ Configure the payment processor operation mode:
 </Table>
 
 <Callout type="warning">
-  **Important!** Always start with test mode. After configuring and testing all functions, you can switch to production mode.
+  **Important!** Always start with test mode. After configuring and testing all
+  functions, you can switch to production mode.
 </Callout>
 
 ### Step 4: Payment Processor Configuration
@@ -222,17 +197,14 @@ After filling in all fields:
 
 <Accordion>
   <Accordion.Item title="Stripe key validation error">
-    Check:
-    - Correctness of copied keys
-    - Key compliance with selected mode (test/live)
-    - Access permissions in Stripe account
+    Check: - Correctness of copied keys - Key compliance with selected mode
+    (test/live) - Access permissions in Stripe account
   </Accordion.Item>
-  
+
   <Accordion.Item title="Paddle key validation error">
-    Make sure that:
-    - API Key is created with "Never Expires" and full permissions
-    - Vendor ID contains only numbers
-    - You're using the correct environment (sandbox/production)
+    Make sure that: - API Key is created with "Never Expires" and full
+    permissions - Vendor ID contains only numbers - You're using the correct
+    environment (sandbox/production)
   </Accordion.Item>
 </Accordion>
 
@@ -241,14 +213,11 @@ After filling in all fields:
 After creating the payment processor:
 
 <Cards>
-  <Cards.Card 
-    title="Connect to Paywall" 
-    href="/docs-v2/paywall/connect-payment-processor"
+  <Cards.Card
+    title="Connect to Paywall"
+    href="/docs-v2/payment-processor/connect-payment-processor"
   />
-  <Cards.Card 
-    title="Configure Webhooks" 
-    href="/docs-v2/webhooks/overview"
-  />
+  <Cards.Card title="Configure Webhooks" href="/docs-v2/webhooks/overview" />
 </Cards>
 
 ## Best Practices
