@@ -1,0 +1,199 @@
+import { Callout, Cards, Steps, Table, Tabs } from 'nextra/components';
+
+# Translations
+
+Translations allow you to automatically display your paywall in the user's language based on their location. This helps **increase conversion rates** by presenting content in a familiar language.
+
+<Callout type="info">
+  The paywall language is determined automatically based on the user's country (via IP geolocation). If no translation is configured for the detected language, the default (English) content will be shown.
+</Callout>
+
+## How It Works
+
+1. You configure translations for target languages in the paywall editor
+2. When a user opens the paywall, their country is detected via IP
+3. The country is mapped to a language code (e.g., Germany &rarr; `de`, France &rarr; `fr`)
+4. If a translation exists for that language, the paywall content is displayed in that language
+5. If no translation is found, the default content is shown
+
+## Translatable Fields
+
+The following paywall fields can be translated:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Field</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Title**</Table.Td>
+      <Table.Td>Main paywall heading displayed at the top</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Sign-in title**</Table.Td>
+      <Table.Td>Heading shown on the sign-in screen (if configured)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Checkout product name**</Table.Td>
+      <Table.Td>Product name displayed during the checkout process</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Price label text**</Table.Td>
+      <Table.Td>Custom label shown next to the price (if configured)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Features list**</Table.Td>
+      <Table.Td>Feature names and descriptions displayed on the paywall</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Supported Languages
+
+Translations support 27 languages: Russian, German, Spanish, French, Italian, Japanese, Korean, Portuguese, Turkish, Ukrainian, Chinese, Polish, Dutch, Swedish, Danish, Norwegian, Finnish, Czech, Hungarian, Romanian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, and Indonesian.
+
+## Setting Up Translations
+
+<Steps>
+
+### Step 1: Open the Translations Tab
+
+1. Go to your paywall settings
+2. Open the **"Translations"** tab in the paywall editor
+
+### Step 2: Select a Language
+
+Choose a target language from the dropdown list. Each language is displayed with its country flag for easy identification.
+
+### Step 3: Add Translations
+
+You have two options:
+
+<Tabs items={['AI Translation', 'Manual Translation']}>
+  <Tabs.Tab>
+    Click the **"Generate with AI"** button to automatically translate all fields into the selected language.
+
+    - The AI translates all non-empty fields from the default language
+    - Uses GPT-4o-mini for high-quality translations
+    - You can review and edit the results after generation
+
+    <Callout type="info">
+      AI translation only translates fields that have content in the default language. Empty fields will be skipped.
+    </Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
+    Manually enter translations for each field:
+
+    - **Title** &mdash; enter the translated paywall heading
+    - **Sign-in title** &mdash; enter the translated sign-in screen heading
+    - **Checkout product name** &mdash; enter the translated product name
+    - **Price label text** &mdash; enter the translated price label
+    - **Features** &mdash; translate each feature name and description individually
+  </Tabs.Tab>
+</Tabs>
+
+### Step 4: Save
+
+Save your paywall settings. The translations will take effect immediately for new visitors.
+
+</Steps>
+
+## Language Detection
+
+The system maps the user's country to a language automatically. For example:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Country</Table.Th>
+      <Table.Th>Language</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Germany, Austria, Switzerland</Table.Td>
+      <Table.Td>German (de)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>France, Belgium</Table.Td>
+      <Table.Td>French (fr)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Spain, Mexico, Argentina</Table.Td>
+      <Table.Td>Spanish (es)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Japan</Table.Td>
+      <Table.Td>Japanese (ja)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Brazil</Table.Td>
+      <Table.Td>Portuguese (pt)</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+If the user's country is not in the mapping or the detected language is English, the default paywall content is shown.
+
+## Autofit Title
+
+When using translations, titles in some languages can become significantly longer than the original. To prevent layout issues, you can enable the **Auto-fit title** option in the **Customization** tab.
+
+When enabled, the title font size is automatically reduced for longer texts:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Title Length</Table.Th>
+      <Table.Th>Font Size</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Up to 40 characters</Table.Td>
+      <Table.Td>Default (large)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>41 &ndash; 60 characters</Table.Td>
+      <Table.Td>Slightly reduced</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Over 60 characters</Table.Td>
+      <Table.Td>Compact</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  We recommend enabling Auto-fit title when using translations, especially for languages like German or Russian that tend to produce longer text.
+</Callout>
+
+## Best Practices
+
+### 1. Start with Key Markets
+Focus on languages for the countries where you have the most traffic. Check your analytics to identify top regions.
+
+### 2. Review AI Translations
+AI-generated translations are a great starting point, but it's recommended to have a native speaker review the content, especially for the main title and product name.
+
+### 3. Keep Titles Concise
+Shorter titles translate better across languages. If you use long titles, enable **Auto-fit title** to prevent layout issues.
+
+### 4. Combine with Local Pricing
+For the best conversion rates, combine translations with [local pricing](/docs-v2/paywall/local-pricing) so users see both localized content and prices in their currency.
+
+## Next Steps
+
+<Cards>
+  <Cards.Card
+    title="Local Pricing"
+    href="/docs-v2/paywall/local-pricing"
+  />
+  <Cards.Card
+    title="Create Paywall"
+    href="/docs-v2/paywall/create-paywall"
+  />
+</Cards>
