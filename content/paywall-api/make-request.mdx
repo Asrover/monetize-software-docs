@@ -43,11 +43,11 @@ Both methods automatically:
 All API provider requests use this URL format:
 
 ```
-https://onlineapp.pro/api/v1/api-gateway/{API_PROVIDER_ID}?paywall_id={PAYWALL_ID}
+https://appbox.space/api/v1/api-gateway/{API_PROVIDER_ID}?paywall_id={PAYWALL_ID}
 ```
 
 <Callout type="info">
-  If you are using a custom domain, make sure to replace "onlineapp.pro" with
+  If you are using a custom domain, make sure to replace "appbox.space" with
   your domain in the request URL, otherwise authentication will not work.
 </Callout>
 
@@ -81,7 +81,7 @@ Use `paywall.makeRequest()` for standard API calls:
 
 ```javascript
 const response = await paywall.makeRequest(
-  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+  "https://appbox.space/api/v1/api-gateway/999?paywall_id=100",
   {
     method: "POST",
     body: JSON.stringify({
@@ -100,7 +100,7 @@ Use `paywall.makeStreamRequest()` for streaming responses:
 
 ```javascript
 const requestUrl =
-  "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=197&test_mode=1";
+  "https://appbox.space/api/v1/api-gateway/999?paywall_id=197&test_mode=1";
 let answer = "";
 
 for await (const chunk of paywall.makeStreamRequest(requestUrl, {
@@ -212,7 +212,7 @@ function APIExample() {
 
     try {
       const result = await paywall.makeRequest(
-        "https://onlineapp.pro/api/v1/api-gateway/999?paywall_id=100",
+        "https://appbox.space/api/v1/api-gateway/999?paywall_id=100",
         {
           method: "POST",
           body: JSON.stringify({

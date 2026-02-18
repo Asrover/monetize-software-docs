@@ -21,7 +21,7 @@ Paywall events provide real-time updates about user authentication, payment stat
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     // Handle paywall state changes
     console.log('Paywall state changed:', event.data);
@@ -77,7 +77,7 @@ interface State {
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     const { auth_status, user } = event.data;
 
@@ -105,7 +105,7 @@ window.addEventListener('message', function (event) {
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     const { visibility_status, visibility_status_reason } = event.data;
 
@@ -131,7 +131,7 @@ window.addEventListener('message', function (event) {
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     const { purchase_status, purchase_status_reason, purchases } = event.data;
 
@@ -167,7 +167,7 @@ const usePaywallEvents = () => {
     const handleMessage = (event) => {
       if (
         event.data?.type === 'state' &&
-        ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+        ['https://appbox.space'].includes(event.origin)
       ) {
         setPaywallState(prevState => ({
           ...prevState,
@@ -201,7 +201,7 @@ const usePaywallEvents = () => {
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     const signInBtn = document.getElementById('sign-in');
     const userMenu = document.getElementById('user-menu');

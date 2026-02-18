@@ -29,7 +29,7 @@ The Get Customer Portal API allows you to:
 ### Endpoint
 
 ```
-POST https://onlineapp.pro/api/v1/paywall/{paywallId}/get-customer-portal
+POST https://appbox.space/api/v1/paywall/{paywallId}/get-customer-portal
 ```
 
 ### Authentication
@@ -134,7 +134,7 @@ Send a POST request with the user's email and optional metadata:
     const paywallId = '123';
     const apiKey = 'your-secret-api-key';
     
-    const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/get-customer-portal`, {
+    const response = await fetch(`https://appbox.space/api/v1/paywall/${paywallId}/get-customer-portal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ Send a POST request with the user's email and optional metadata:
     paywall_id = '123'
     api_key = 'your-secret-api-key'
     
-    url = f'https://onlineapp.pro/api/v1/paywall/{paywall_id}/get-customer-portal'
+    url = f'https://appbox.space/api/v1/paywall/{paywall_id}/get-customer-portal'
     headers = {
         'Content-Type': 'application/json',
         'x-api-key': api_key
@@ -196,7 +196,7 @@ Send a POST request with the user's email and optional metadata:
     $paywallId = '123';
     $apiKey = 'your-secret-api-key';
     
-    $url = "https://onlineapp.pro/api/v1/paywall/{$paywallId}/get-customer-portal";
+    $url = "https://appbox.space/api/v1/paywall/{$paywallId}/get-customer-portal";
     
     $data = [
         'email' => 'user@example.com',
@@ -232,7 +232,7 @@ Send a POST request with the user's email and optional metadata:
   </Tabs.Tab>
   <Tabs.Tab>
     ```bash
-    curl -X POST https://onlineapp.pro/api/v1/paywall/123/get-customer-portal \
+    curl -X POST https://appbox.space/api/v1/paywall/123/get-customer-portal \
       -H "Content-Type: application/json" \
       -H "x-api-key: your-secret-api-key" \
       -d '{
@@ -351,7 +351,7 @@ const generateCustomerPortal = async (email, userMeta) => {
     }
 
     const response = await fetch(
-      `https://onlineapp.pro/api/v1/paywall/${process.env.PAYWALL_ID}/get-customer-portal`,
+      `https://appbox.space/api/v1/paywall/${process.env.PAYWALL_ID}/get-customer-portal`,
       {
         method: 'POST',
         headers: {

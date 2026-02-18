@@ -168,7 +168,7 @@ Simply append the additional path directly to the API provider URL. The system w
   <Tabs.Tab>
     ```javascript
     // Request to base endpoint
-    fetch('https://onlineapp.pro/api/v1/api-gateway/your-provider-id', {
+    fetch('https://appbox.space/api/v1/api-gateway/your-provider-id', {
       method: 'POST',
       body: JSON.stringify({
         // Your request data here
@@ -177,7 +177,7 @@ Simply append the additional path directly to the API provider URL. The system w
     // Goes to: https://api.example.com/v1/users
 
     // Request with additional path - append to provider URL
-    fetch('https://onlineapp.pro/api/v1/api-gateway/your-provider-id/profile/settings', {
+    fetch('https://appbox.space/api/v1/api-gateway/your-provider-id/profile/settings', {
       method: 'POST',
       body: JSON.stringify({
         // Your request data here
@@ -186,7 +186,7 @@ Simply append the additional path directly to the API provider URL. The system w
     // Goes to: https://api.example.com/v1/users/profile/settings
 
     // Another example with user ID and orders
-    fetch('https://onlineapp.pro/api/v1/api-gateway/your-provider-id/123/orders', {
+    fetch('https://appbox.space/api/v1/api-gateway/your-provider-id/123/orders', {
       method: 'GET'
     });
     // Goes to: https://api.example.com/v1/users/123/orders
@@ -195,17 +195,17 @@ Simply append the additional path directly to the API provider URL. The system w
   <Tabs.Tab>
     ```bash
     # Request to base endpoint
-    curl -X POST https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id \
+    curl -X POST https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id \
       -H "Content-Type: application/json" \
       -d '{"key": "value"}'
 
     # Request with additional path - append to provider URL
-    curl -X POST https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id/profile/settings \
+    curl -X POST https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id/profile/settings \
       -H "Content-Type: application/json" \
       -d '{"key": "value"}'
 
     # GET request with path
-    curl -X GET https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id/123/orders
+    curl -X GET https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id/123/orders
     ```
   </Tabs.Tab>
   <Tabs.Tab>
@@ -214,19 +214,19 @@ Simply append the additional path directly to the API provider URL. The system w
 
     # Request to base endpoint
     response = requests.post(
-        'https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id',
+        'https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id',
         json={'key': 'value'}
     )
 
     # Request with additional path - append to provider URL
     response = requests.post(
-        'https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id/profile/settings',
+        'https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id/profile/settings',
         json={'key': 'value'}
     )
 
     # GET request with path
     response = requests.get(
-        'https://your-paywall.comhttps://onlineapp.pro/api/v1/api-gateway/your-provider-id/123/orders'
+        'https://your-paywall.comhttps://appbox.space/api/v1/api-gateway/your-provider-id/123/orders'
     )
     ```
   </Tabs.Tab>
@@ -238,7 +238,7 @@ Simply append the additional path directly to the API provider URL. The system w
 // Provider ID: openai-provider
 
 // Chat with GPT-4
-fetch('https://onlineapp.pro/api/v1/api-gateway/openai-provider/chat/completions', {
+fetch('https://appbox.space/api/v1/api-gateway/openai-provider/chat/completions', {
   method: 'POST',
   body: JSON.stringify({
     model: 'gpt-4',
@@ -248,7 +248,7 @@ fetch('https://onlineapp.pro/api/v1/api-gateway/openai-provider/chat/completions
 // → https://api.openai.com/v1/chat/completions
 
 // Image generation
-fetch('https://onlineapp.pro/api/v1/api-gateway/openai-provider/images/generations', {
+fetch('https://appbox.space/api/v1/api-gateway/openai-provider/images/generations', {
   method: 'POST',
   body: JSON.stringify({
     prompt: 'A beautiful sunset',
@@ -258,7 +258,7 @@ fetch('https://onlineapp.pro/api/v1/api-gateway/openai-provider/images/generatio
 // → https://api.openai.com/v1/images/generations
 
 // File operations
-fetch('https://onlineapp.pro/api/v1/api-gateway/openai-provider/files')
+fetch('https://appbox.space/api/v1/api-gateway/openai-provider/files')
 // → https://api.openai.com/v1/files
 ```
 

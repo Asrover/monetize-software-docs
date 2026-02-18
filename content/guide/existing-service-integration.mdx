@@ -43,7 +43,7 @@ Create Server-Mode Paywall
 # Environment variables
 MONETIZE_API_KEY=your_api_key_here
 MONETIZE_PAYWALL_ID=your_paywall_id_here
-MONETIZE_API_URL=https://onlineapp.pro/api/v1
+MONETIZE_API_URL=https://appbox.space/api/v1
 ```
 
 ### Step 5: Install Server SDK
@@ -62,7 +62,7 @@ Choose your preferred server technology:
       constructor(apiKey, paywallId) {
         this.apiKey = apiKey;
         this.paywallId = paywallId;
-        this.baseURL = 'https://onlineapp.pro/api/v1';
+        this.baseURL = 'https://appbox.space/api/v1';
       }
       
       async makeRequest(endpoint, options = {}) {
@@ -98,7 +98,7 @@ Choose your preferred server technology:
         def __init__(self, api_key, paywall_id):
             self.api_key = api_key
             self.paywall_id = paywall_id
-            self.base_url = 'https://onlineapp.pro/api/v1'
+            self.base_url = 'https://appbox.space/api/v1'
         
         def make_request(self, endpoint, method='GET', data=None):
             headers = {
@@ -135,7 +135,7 @@ Choose your preferred server technology:
             $this->apiKey = $apiKey;
             $this->paywallId = $paywallId;
             $this->client = new Client([
-                'base_uri' => 'https://onlineapp.pro/api/v1/',
+                'base_uri' => 'https://appbox.space/api/v1/',
                 'headers' => [
                     'x-api-key' => $this->apiKey,
                     'Content-Type' => 'application/json'
@@ -170,7 +170,7 @@ Choose your preferred server technology:
     
     class MonetizeClient
       include HTTParty
-      base_uri 'https://onlineapp.pro/api/v1'
+      base_uri 'https://appbox.space/api/v1'
       
       def initialize(api_key, paywall_id)
         @api_key = api_key

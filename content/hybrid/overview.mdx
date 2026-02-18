@@ -48,9 +48,7 @@ User Interaction -> Paywall (purchase/sign-out/restore)
 // Safe subscription example
 window.addEventListener("message", function (event) {
   const allowed = [
-    "https://onlineapp.pro",
-    "https://onlineapp.live",
-    "https://onlineapp.stream",
+    "https://appbox.space",
   ];
   if (event.data?.type !== "PAYWALL_EVENT" || !allowed.includes(event.origin))
     return;
@@ -137,7 +135,7 @@ export async function POST(req) {
     const apiKey = process.env.PAYWALL_API_KEY;
 
     const response = await fetch(
-      `https://onlineapp.pro/api/v1/paywall/${paywallId}/start-checkout`,
+      `https://appbox.space/api/v1/paywall/${paywallId}/start-checkout`,
       {
         method: "POST",
         headers: {

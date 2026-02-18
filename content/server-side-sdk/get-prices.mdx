@@ -26,7 +26,7 @@ The Get Prices API endpoint allows you to retrieve all available prices for a sp
 ### Endpoint
 
 ```
-GET https://onlineapp.pro/api/v1/paywall/{paywallId}/prices
+GET https://appbox.space/api/v1/paywall/{paywallId}/prices
 ```
 
 ### Authentication
@@ -102,7 +102,7 @@ Navigate to your paywall settings page and get the ID from the Paywall ID field:
 
 ```javascript
 const paywallId = '123';
-const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/prices`, {
+const response = await fetch(`https://appbox.space/api/v1/paywall/${paywallId}/prices`, {
   method: 'GET',
   headers: {
     'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ if (result.error) {
 ```javascript
 const safeFetchPrices = async (paywallId, apiKey) => {
   try {
-    const response = await fetch(`https://onlineapp.pro/api/v1/paywall/${paywallId}/prices`, {
+    const response = await fetch(`https://appbox.space/api/v1/paywall/${paywallId}/prices`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

@@ -135,7 +135,7 @@ function UserMenu() {
 window.addEventListener('message', function (event) {
   if (
     event.data?.type === 'state' &&
-    ['https://onlineapp.pro', 'https://onlineapp.live', 'https://onlineapp.stream'].includes(event.origin)
+    ['https://appbox.space'].includes(event.origin)
   ) {
     if (event.data.auth_status === 'signed-out') {
       console.log('User signed out via event');

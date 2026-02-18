@@ -32,7 +32,7 @@ The customer portal is a secure, hosted page that allows your subscribers to:
 The customer portal is accessible via a direct URL with your paywall ID:
 
 ```
-https://onlineapp.pro/paywall/{{PAYWALL_ID}}/customer-portal/get
+https://appbox.space/paywall/{{PAYWALL_ID}}/customer-portal/get
 ```
 
 ### Finding Your Paywall ID
@@ -46,7 +46,7 @@ https://onlineapp.pro/paywall/{{PAYWALL_ID}}/customer-portal/get
 If your paywall ID is `100`, the customer portal URL will be:
 
 ```
-https://onlineapp.pro/paywall/100/customer-portal/get
+https://appbox.space/paywall/100/customer-portal/get
 ```
 
 ### Open Support Form via URL
@@ -58,7 +58,7 @@ To open the Support form directly when the customer portal loads, append the `ta
 Example:
 
 ```
-https://onlineapp.pro/paywall/100/customer-portal/get?tab=support
+https://appbox.space/paywall/100/customer-portal/get?tab=support
 ```
 
 <Steps>
@@ -100,7 +100,7 @@ Add customer portal links throughout your app:
 ```javascript
 // React example
 const CustomerPortalButton = ({ paywallId }) => {
-  const portalUrl = `https://onlineapp.pro/paywall/${paywallId}/customer-portal/get`;
+  const portalUrl = `https://appbox.space/paywall/${paywallId}/customer-portal/get`;
 
   return (
     <a href={portalUrl} target="_blank" rel="noopener">
@@ -117,7 +117,7 @@ Include portal access in automated emails:
 ```html
 <!-- Email template example -->
 <p>Manage your subscription:</p>
-<a href="https://onlineapp.pro/paywall/{{PAYWALL_ID}}/customer-portal/get">
+<a href="https://appbox.space/paywall/{{PAYWALL_ID}}/customer-portal/get">
   Visit Customer Portal
 </a>
 ```
@@ -129,7 +129,7 @@ Create help articles with portal instructions:
 ```markdown
 ## How to Cancel Your Subscription
 
-1. Visit your customer portal: https://onlineapp.pro/paywall/[YOUR_ID]/customer-portal/get
+1. Visit your customer portal: https://appbox.space/paywall/[YOUR_ID]/customer-portal/get
 2. Click "Cancel Subscription"
 3. Follow the confirmation steps
 ```
