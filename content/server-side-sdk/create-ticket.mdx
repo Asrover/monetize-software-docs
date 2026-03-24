@@ -1,0 +1,365 @@
+import {
+  Callout,
+  Cards,
+  Steps,
+  Table,
+  Tabs,
+} from 'nextra/components';
+
+# Create Support Ticket
+
+Create support tickets programmatically for server-side integrations. This API endpoint allows your backend to submit support requests on behalf of users, automatically handling user creation and management.
+
+<Callout type="info">
+  **Server-Side Only:** This endpoint is designed for server-side use with API keys. For client-side integrations, use the built-in support form in the [Customer Portal](/docs-v2/paywall/customer-portal).
+</Callout>
+
+## Overview
+
+The Create Support Ticket API allows you to:
+
+- **Submit tickets programmatically** - Create support tickets from your server
+- **Automatic user management** - Users are created automatically if they don't exist
+- **No prior authentication required** - Users don't need to be logged in beforehand
+- **Rate limiting** - Built-in protection against abuse (max 2 tickets per user per day)
+- **Custom metadata support** - Attach user metadata for context
+
+## API Reference
+
+### Endpoint
+
+```
+POST https://appbox.space/api/v1/paywall/{paywallId}/create-ticket
+```
+
+### Authentication
+
+Include your API key in the request header:
+
+```
+x-api-key: your-secret-api-key
+```
+
+<Steps>
+
+### Step 1: Get Your API Key
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![API Key Location](/docs/create-api-key.png)
+</div>
+
+### Step 2: Find Your Paywall ID
+
+Get your paywall ID from the paywall settings page URL:
+
+<div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+  ![Paywall ID location](/docs/paywall-id-location.png)
+</div>
+
+### Step 3: Make API Request
+
+Send a POST request with the user's email, subject, message, and optional metadata:
+
+</Steps>
+
+## Request Parameters
+
+### URL Parameters
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Parameter</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>Required</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**paywallId**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>Your paywall identifier</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Request Body
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Field</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>Required</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**email**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>User's email address</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**subject**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>Ticket subject (3-200 characters)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**message**</Table.Td>
+      <Table.Td>string</Table.Td>
+      <Table.Td>Yes</Table.Td>
+      <Table.Td>Ticket message content (1-5000 characters)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**userMeta**</Table.Td>
+      <Table.Td>object</Table.Td>
+      <Table.Td>No</Table.Td>
+      <Table.Td>Custom metadata linked to user</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Example Request Body
+
+```json
+{
+  "email": "user@example.com",
+  "subject": "Cannot access premium features",
+  "message": "I purchased a subscription yesterday but still can't access premium features. My order ID is #12345.",
+  "userMeta": {
+    "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b",
+    "plan": "premium"
+  }
+}
+```
+
+## Implementation Examples
+
+<Tabs items={['JavaScript/Node.js', 'Python', 'PHP', 'cURL']}>
+  <Tabs.Tab>
+    ```javascript
+    const paywallId = '123';
+    const apiKey = 'your-secret-api-key';
+
+    const response = await fetch(`https://appbox.space/api/v1/paywall/${paywallId}/create-ticket`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey
+      },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        subject: 'Cannot access premium features',
+        message: 'I purchased a subscription but still cannot access premium features.',
+        userMeta: {
+          "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b"
+        }
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('Ticket created:', data.ticket);
+      // { id: 42, status: 'open' }
+    } else {
+      console.error('Error:', data);
+    }
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```python
+    import requests
+
+    paywall_id = '123'
+    api_key = 'your-secret-api-key'
+
+    url = f'https://appbox.space/api/v1/paywall/{paywall_id}/create-ticket'
+    headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': api_key
+    }
+    data = {
+        'email': 'user@example.com',
+        'subject': 'Cannot access premium features',
+        'message': 'I purchased a subscription but still cannot access premium features.',
+        'userMeta': {
+            'my-user-uuid': 'pojfoih27938y50ujtb4ip1n2b'
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code == 200:
+        result = response.json()
+        print(f'Ticket created: {result["ticket"]}')
+    else:
+        print(f'Error: {response.status_code} - {response.text}')
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```php
+    <?php
+    $paywallId = '123';
+    $apiKey = 'your-secret-api-key';
+
+    $url = "https://appbox.space/api/v1/paywall/{$paywallId}/create-ticket";
+
+    $data = [
+        'email' => 'user@example.com',
+        'subject' => 'Cannot access premium features',
+        'message' => 'I purchased a subscription but still cannot access premium features.',
+        'userMeta' => [
+            'my-user-uuid' => 'pojfoih27938y50ujtb4ip1n2b'
+        ]
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'x-api-key: ' . $apiKey
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200) {
+        $result = json_decode($response, true);
+        echo "Ticket created: " . $result['ticket']['id'];
+    } else {
+        echo "Error: {$httpCode} - {$response}";
+    }
+    ?>
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    curl -X POST https://appbox.space/api/v1/paywall/123/create-ticket \
+      -H "Content-Type: application/json" \
+      -H "x-api-key: your-secret-api-key" \
+      -d '{
+        "email": "user@example.com",
+        "subject": "Cannot access premium features",
+        "message": "I purchased a subscription but still cannot access premium features.",
+        "userMeta": {
+          "my-user-uuid": "pojfoih27938y50ujtb4ip1n2b"
+        }
+      }'
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "ticket": {
+    "id": 42,
+    "status": "open"
+  }
+}
+```
+
+### Error Responses
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Status Code</Table.Th>
+      <Table.Th>Error Type</Table.Th>
+      <Table.Th>Description</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**400**</Table.Td>
+      <Table.Td>Bad Request</Table.Td>
+      <Table.Td>Missing or invalid parameters (email, subject, message)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**401**</Table.Td>
+      <Table.Td>Unauthorized</Table.Td>
+      <Table.Td>Invalid or missing API key</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**403**</Table.Td>
+      <Table.Td>Forbidden</Table.Td>
+      <Table.Td>API key owner does not match paywall owner</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**429**</Table.Td>
+      <Table.Td>Too Many Requests</Table.Td>
+      <Table.Td>Rate limit exceeded (max 2 tickets per user per day)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**500**</Table.Td>
+      <Table.Td>Internal Server Error</Table.Td>
+      <Table.Td>Server-side error occurred</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Use Cases
+
+### In-App Support Form
+
+Build a custom support form in your application and submit tickets from your server:
+
+```javascript
+// Express.js example
+app.post('/support', async (req, res) => {
+  const { subject, message } = req.body;
+
+  const response = await fetch(
+    `https://appbox.space/api/v1/paywall/${process.env.PAYWALL_ID}/create-ticket`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.API_KEY
+      },
+      body: JSON.stringify({
+        email: req.user.email,
+        subject,
+        message,
+        userMeta: { user_id: req.user.id }
+      })
+    }
+  );
+
+  const data = await response.json();
+  res.json({ ticketId: data.ticket.id });
+});
+```
+
+## Security Guidelines
+
+1. **Store API keys securely** - Never expose API keys in client-side code
+2. **Validate user input** - Sanitize subject and message before sending
+3. **Use HTTPS** - Always use encrypted connections
+4. **Implement your own rate limiting** - Add additional rate limiting on your server if needed
+
+## Next Steps
+
+<Cards>
+  <Cards.Card
+    title="Get Customer Portal"
+    href="/docs-v2/server-side-sdk/get-customer-portal"
+  />
+  <Cards.Card
+    title="Start Checkout"
+    href="/docs-v2/server-side-sdk/start-checkout"
+  />
+</Cards>
