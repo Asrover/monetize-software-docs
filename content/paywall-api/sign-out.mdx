@@ -21,12 +21,12 @@ The `paywall.signOut()` function logs out the current user from the paywall syst
 ### Method Signature
 
 ```typescript
-paywall.signOut(): void
+paywall.signOut(): Promise<Response>
 ```
 
 ### Return Value
 
-This method does not return a value. It performs the sign-out action immediately.
+Returns a `Promise` that resolves with the server response when the sign-out request completes.
 
 ## Basic Usage
 
@@ -34,7 +34,7 @@ This method does not return a value. It performs the sign-out action immediately
 
 ```javascript
 // Sign out the current user
-paywall.signOut();
+await paywall.signOut();
 
 console.log('User has been signed out');
 ```
@@ -42,9 +42,9 @@ console.log('User has been signed out');
 ### Sign Out with UI Update
 
 ```javascript
-const handleSignOut = () => {
+const handleSignOut = async () => {
   // Sign out the user
-  paywall.signOut();
+  await paywall.signOut();
 
   // Update UI to reflect signed-out state
   updateUserInterface();
@@ -80,9 +80,9 @@ function UserMenu() {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     // Sign out the user
-    paywall.signOut();
+    await paywall.signOut();
 
     // Update local state
     setUser(null);
@@ -160,8 +160,8 @@ const handleUserSignedOut = () => {
 };
 
 // Manual sign out function
-const signOutUser = () => {
-  paywall.signOut();
+const signOutUser = async () => {
+  await paywall.signOut();
   // The event listener above will handle the UI updates
 };
 ```
@@ -169,13 +169,13 @@ const signOutUser = () => {
 ### Sign Out with Confirmation
 
 ```javascript
-const signOutWithConfirmation = () => {
+const signOutWithConfirmation = async () => {
   // Show confirmation dialog
   const confirmed = confirm('Are you sure you want to sign out?');
 
   if (confirmed) {
     // Perform sign out
-    paywall.signOut();
+    await paywall.signOut();
 
     // Show success message
     showNotification('You have been signed out successfully');
