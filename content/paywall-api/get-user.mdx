@@ -23,6 +23,7 @@ The `paywall.getUser()` method provides complete user information for authentica
 - **Token balances** - remaining tokens for each action type (tokenized paywalls)
 - **Geographic data** - country matching and tier information
 - **Trial status** - active subscription trials
+- **User metadata** - custom key-value pairs set via `setUserMetadata()`
 
 <Callout type="info">
   **Authentication Required:** This method requires user authentication. For unauthenticated users, it returns a 401 error with basic country information.
@@ -61,6 +62,8 @@ paywall.getUser(): Promise<GetUserResponse>
         startedAt: string;
         expiresAt: string;
       }
+      /** User metadata set via setUserMetadata(), if any */
+      meta?: Record<string, string>;
     }
     ```
   </Tabs.Tab>
@@ -450,6 +453,10 @@ const safeGetUser = async () => {
   trial: {
     startedAt: "2024-01-15T10:30:00Z",
     expiresAt: "2024-01-22T10:30:00Z"
+  },
+  meta: {
+    "source": "landing_page",
+    "campaign": "spring_sale"
   }
 }
 ```
