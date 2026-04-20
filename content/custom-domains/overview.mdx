@@ -10,7 +10,7 @@ Custom domains allow you to use your own domain for displaying paywalls instead 
 
 ## What are custom domains?
 
-A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or `api.yoursite.com`) that will be used to display the paywall. Instead of users seeing `appbox.space` in the address bar, they will see your domain.
+A custom domain is a subdomain of your website (e.g., `app.yoursite.com` or `api.yoursite.com`) that will be used to display the paywall. Instead of users seeing `appbox.space` in the address bar, they will see your domain.
 
 <Callout type="info">
   **Important:** The checkout page itself will open on the domain specified in
@@ -52,26 +52,31 @@ A custom domain is a subdomain of your website (e.g., `paywall.yoursite.com` or 
 
 ✅ **Supported:** Third-level subdomains
 
+- `app.yoursite.com`
+- `platform.yoursite.com`
+- `account.yoursite.com`
 - `api.yoursite.com`
-- `pay.yoursite.com`
-- `paywall.yoursite.com`
 
 ❌ **Not supported:** Root domains
 
 - `yoursite.com`
 - `www.yoursite.com`
 
+<Callout type="warning">
+  **Avoid payment-related names** like `pay.*`, `paywall.*`, `checkout.*`, `billing.*`. These keywords are often blocked by adblockers (uBlock, AdBlock Plus, Brave Shields), which will break the paywall for a notable share of your users. Prefer neutral subdomains like `app.*`, `platform.*`, `account.*`.
+</Callout>
+
 ### DNS configuration
 
-To make a custom domain work, delegate your subdomain to DigitalOcean by creating NS records for the subdomain in your primary DNS provider. Example for `pay.yoursite.com`:
+To make a custom domain work, delegate your subdomain to DigitalOcean by creating NS records for the subdomain in your primary DNS provider. Example for `app.yoursite.com`:
 
 ```
-NS pay.yoursite.com ns1.digitalocean.com
-NS pay.yoursite.com ns2.digitalocean.com
-NS pay.yoursite.com ns3.digitalocean.com
+NS app.yoursite.com ns1.digitalocean.com
+NS app.yoursite.com ns2.digitalocean.com
+NS app.yoursite.com ns3.digitalocean.com
 ```
 
-This is called subdomain delegation. You do NOT need to change nameservers for the entire root domain — only delegate the specific subdomain (e.g., `pay`).
+This is called subdomain delegation. You do NOT need to change nameservers for the entire root domain — only delegate the specific subdomain (e.g., `app`).
 
 ## Setup process
 

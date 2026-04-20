@@ -15,10 +15,14 @@ This guide will help you set up a custom domain for your paywall. The process co
 ![Add domain](/docs/add-custom-domain.png)
 
 4. In the popup window, enter your third-level subdomain:
-   - ✅ Correct: `paywall.yoursite.com`
-   - ✅ Correct: `checkout.yoursite.com`
-   - ✅ Correct: `api.yoursite.com`
+   - ✅ Correct: `app.yoursite.com`
+   - ✅ Correct: `platform.yoursite.com`
+   - ✅ Correct: `account.yoursite.com`
    - ❌ Incorrect: `yoursite.com` (root domain)
+
+<Callout type="warning">
+  **Avoid payment-related subdomains** like `pay.*`, `paywall.*`, `checkout.*`, `billing.*` — they are often blocked by adblockers (uBlock, AdBlock Plus, Brave Shields) and will fail for a share of your users. Prefer neutral names: `app.*`, `platform.*`, `account.*`.
+</Callout>
 
 ![Enter domain](/docs/add-custom-domain-2.png)
 
@@ -34,12 +38,12 @@ Now you need to delegate your subdomain to DigitalOcean DNS by creating NS recor
 
 1. Log into your domain's DNS management panel
 2. Find the DNS records management section
-3. Create three **NS** records for your subdomain (e.g., `paywall.yoursite.com`):
+3. Create three **NS** records for your subdomain (e.g., `app.yoursite.com`):
 
 | Parameter | Value |
 |-----------|-------|
 | **Record Type** | NS |
-| **Name/Host** | `paywall.yoursite.com` |
+| **Name/Host** | `app.yoursite.com` |
 | **Value/Target** | `ns1.digitalocean.com` |
 | **Value/Target** | `ns2.digitalocean.com` |
 | **Value/Target** | `ns3.digitalocean.com` |
