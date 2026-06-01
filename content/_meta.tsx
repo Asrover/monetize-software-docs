@@ -18,17 +18,21 @@ export default {
   offers: 'Offers',
   faq: 'FAQ',
   '--for-ai-agents': { type: 'separator', title: 'For AI agents' },
-  'llms-txt': {
-    title: 'llms.txt (index)',
-    href: '/llms.txt'
-  },
-  'llms-full-txt': {
-    title: 'llms-full.txt (all docs)',
-    href: '/llms-full.txt'
-  },
   'llms-sdk-v3-txt': {
     title: 'llms-sdk-v3.txt (SDK 3.0 pack)',
     href: '/llms-sdk-v3.txt'
+  },
+  examples: {
+    title: 'Examples',
+    type: 'page',
+    href: 'https://monetize-software-sdk-nextjs-example.vercel.app/',
+    newWindow: true
+  },
+  'ai-agent-pack': {
+    title: 'AI agent (llms.txt)',
+    type: 'page',
+    href: '/llms-sdk-v3.txt',
+    newWindow: true
   },
   roadmap: {
     title: 'Roadmap',
