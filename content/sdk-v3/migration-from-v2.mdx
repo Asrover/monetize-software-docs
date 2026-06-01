@@ -1,0 +1,496 @@
+import { Callout, Steps, Table, Tabs, Cards } from 'nextra/components';
+
+# Migration from v2
+
+A guide for projects already using the script-tag SDK (`wall.x.x.js` via `<script>` + iframe rendering) that want to move to SDK 3.0 (bundled npm package + Shadow DOM, no iframe).
+
+<Callout type="info">
+  **You don't have to migrate right now.** The v2 SDK is still supported and keeps working. Migrate when:
+  - **You're building a Chrome extension (MV3)** — CWS review forbids remote code, the iframe SDK won't pass. SDK 3.0 is the only path.
+  - **You want to customise the UI** or fit the paywall into your own layout — Shadow DOM is friendlier than an iframe.
+  - **Bundle size matters** (Telegram Mini Apps, edge runtimes) — 3.0 ships via npm and tree-shakes.
+  - **You want a typed API** — 3.0 is fully TypeScript with strict event payloads and discriminated unions.
+</Callout>
+
+## What changes conceptually
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Aspect</Table.Th>
+      <Table.Th>v2 (script-tag)</Table.Th>
+      <Table.Th>SDK 3.0 (npm)</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Distribution</Table.Td>
+      <Table.Td>`<script src="…/wall.x.x.js">`</Table.Td>
+      <Table.Td>`@monetize.software/sdk` via npm. ESM CDN (`esm.sh`/`unpkg`/`jsDelivr`) also supported for web.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Rendering</Table.Td>
+      <Table.Td>iframe from `appbox.space`</Table.Td>
+      <Table.Td>Shadow DOM on the same page. No iframe.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Global object</Table.Td>
+      <Table.Td>`window.paywall`</Table.Td>
+      <Table.Td>Import + `new PaywallUI({ paywallId, apiOrigin })`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>API origin</Table.Td>
+      <Table.Td>`appbox.space` (managed)</Table.Td>
+      <Table.Td>Mandatory `apiOrigin = your paywall's custom_domain`. No fallback to appbox.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Events</Table.Td>
+      <Table.Td>`window.addEventListener('message', ...)` with a state payload</Table.Td>
+      <Table.Td>`paywall.on('event', cb)` — typed emitter.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Auth</Table.Td>
+      <Table.Td>Managed by the paywall backend, token in an `appbox.space` cookie</Table.Td>
+      <Table.Td>Bearer token in `AuthClient` + localStorage / `chrome.storage.local`. No cookies.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Chrome Extension</Table.Td>
+      <Table.Td>❌ Forbidden by CWS policy</Table.Td>
+      <Table.Td>✅ Dedicated package `@monetize.software/sdk-extension` with an offscreen document.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **`apiOrigin` is required at init.** v2 baked the origin into the script; v3 makes you pass your `custom_domain` explicitly. Without it, `BillingClient` throws `invalid_config`. Set up a [custom domain](/docs-v2/custom-domains) first if you haven't.
+</Callout>
+
+## Migration strategy
+
+You don't have to migrate everything at once:
+
+1. **In-place upgrade.** Flip a single paywall's `sdk_version` in the DB; the online server is channel-agnostic. After release, verify new sessions go through SDK 3.0.
+2. **Parallel paywalls.** Create a second paywall with the same prices and route SDK 3.0 to part of the traffic (A/B by feature flag).
+3. **Full cutover.** Ship a frontend with SDK 3.0, strip the old `<script>` tag and iframe assets.
+
+The optimal path is usually **in-place upgrade** on one paywall; the legacy v2 SDK keeps serving users already signed in from previous sessions through the same endpoints — no data migration needed.
+
+## Step by step: a typical web project
+
+<Steps>
+
+### Step 1. Install the package
+
+```bash
+pnpm add @monetize.software/sdk
+```
+
+ESM CDN (when there's no bundler):
+
+```html
+<script type="module">
+  import { PaywallUI } from 'https://esm.sh/@monetize.software/sdk@3';
+  // ...
+</script>
+```
+
+### Step 2. Replace initialization
+
+<Tabs items={['v2 (script-tag)', 'v3 (npm)']}>
+<Tabs.Tab>
+
+```html
+<!-- script from the dashboard — fixed URL and configuration -->
+<script src="https://appbox.space/sdk/wall.123.js" async></script>
+<script>
+  // window.paywall becomes available globally after the script loads
+  paywall.open();
+</script>
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+export const paywall = new PaywallUI({
+  paywallId: '123',
+  apiOrigin: 'https://pay.your-domain.com', // required
+  identity: { email: user.email, userId: user.id },
+  // or: auth: true — for built-in email/OTP/OAuth login
+});
+
+paywall.open();
+```
+
+</Tabs.Tab>
+</Tabs>
+
+### Step 3. Rewrite event handlers
+
+<Tabs items={['v2', 'v3']}>
+<Tabs.Tab>
+
+```js
+window.addEventListener('message', (event) => {
+  if (event.origin !== 'https://appbox.space') return;
+  if (event.data?.type !== 'state') return;
+
+  const { purchase_status, purchase_status_reason } = event.data;
+  if (purchase_status === 'paid') {
+    unlockFeature();
+  }
+});
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```ts
+paywall.on('purchase_completed', ({ priceId, sessionId, restored }) => {
+  // `restored: true` — an existing subscription was picked up by the SDK,
+  // not a fresh charge. Dedupe before throwing confetti.
+  unlockFeature();
+});
+
+paywall.on('purchase_failed', ({ reason }) => {
+  // reason: 'failed' | 'cancelled'
+});
+
+paywall.on('userChange', (user) => {
+  // user.has_active_subscription (boolean) — replaces v2's user.paid
+});
+```
+
+</Tabs.Tab>
+</Tabs>
+
+Full event list — in [Events](/docs-v2/sdk-v3/events).
+
+### Step 4. Rewrite `getUser`
+
+In v2, `paywall.getUser()` returned a flat object with everything at once. In v3 there are two distinct methods: `paywall.billing.getUser()` for the access-gate, `paywall.billing.listPurchases()` for customer-portal UI.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>v2 field</Table.Th>
+      <Table.Th>v3 equivalent</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`user.paid`</Table.Td>
+      <Table.Td>`user.has_active_subscription`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user.purchases`</Table.Td>
+      <Table.Td>`user.purchases` (minimal shape) or `billing.listPurchases()` (rich shape for customer portal).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user.trial`</Table.Td>
+      <Table.Td>`user.trial` (`{ started_at, expires_at }` or `null`).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user.balances`</Table.Td>
+      <Table.Td>`billing.getBalances()` — separate endpoint, persist + stale-while-revalidate.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user.country` / `user.tier` / `user.countryMatch`</Table.Td>
+      <Table.Td>`bootstrap.settings.visibility.country / .tier / .visible`. Available synchronously via `paywall.getVisibility()`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user.meta` (`setUserMetadata`)</Table.Td>
+      <Table.Td>Pass `userMeta` to `signInWithEmail` / `signUp` / `signInAnonymously`. The client can no longer fetch `meta` back via the SDK; read through your own backend if needed.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+```ts
+// v2
+const userInfo = await paywall.getUser();
+if (userInfo.paid) enablePremium();
+
+// v3
+const user = await paywall.billing.getUser();
+if (user.has_active_subscription) enablePremium();
+```
+
+### Step 5. Trial — same concept, new API
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>v2</Table.Th>
+      <Table.Th>v3</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`paywall.open()` throws with `visibility_reason: 'time-trial' \| 'openings-trial'`</Table.Td>
+      <Table.Td>`paywall.open()` emits `trial_blocked` (modal does not open)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>No dedicated read method — you had to glue state from events</Table.Td>
+      <Table.Td>`paywall.getTrialStatus()` — sync snapshot; `paywall.getAccess()` — discriminated union granted/blocked.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>No skip flag</Table.Td>
+      <Table.Td>`paywall.open({ skipTrial: true })`</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+See [Trial](/docs-v2/sdk-v3/trial) for the full picture.
+
+### Step 6. Replace `<script>` tags with imports
+
+Remove `<script src="...appbox.space/...">` from your HTML. If you have several call sites, centralize the init in one module:
+
+```ts
+// src/paywall.ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+export const paywall = new PaywallUI({
+  paywallId: process.env.NEXT_PUBLIC_PAYWALL_ID!,
+  apiOrigin: process.env.NEXT_PUBLIC_PAYWALL_ORIGIN!,
+  auth: true
+});
+```
+
+Import `paywall` from this module wherever needed. `PaywallUI` is singleton-friendly.
+
+</Steps>
+
+## API equivalents: method by method
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>v2</Table.Th>
+      <Table.Th>v3</Table.Th>
+      <Table.Th>Notes</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`paywall.open()`</Table.Td>
+      <Table.Td>`paywall.open()`</Table.Td>
+      <Table.Td>v3 is synchronous (no `resolveEvent`). Reaction goes through events.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.open({ resolveEvent: 'signed-in' })`</Table.Td>
+      <Table.Td>`paywall.openSignin()` + `paywall.on('authChange', ...)`</Table.Td>
+      <Table.Td>v3 splits "auth-only open" and "signup-only open".</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.open({ skipTrial: true })`</Table.Td>
+      <Table.Td>`paywall.open({ skipTrial: true })`</Table.Td>
+      <Table.Td>Same.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.signOut()`</Table.Td>
+      <Table.Td>`paywall.auth?.signOut()`</Table.Td>
+      <Table.Td>Only with managed-auth.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.signInAnonymously()`</Table.Td>
+      <Table.Td>`paywall.signInAnonymously()` / `auth.signInAnonymously()`</Table.Td>
+      <Table.Td>Headless — no modal.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.getUser()`</Table.Td>
+      <Table.Td>`paywall.billing.getUser()`</Table.Td>
+      <Table.Td>Different shape — see the table above.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.getOfferInfo()`</Table.Td>
+      <Table.Td>`paywall.billing.getCachedBootstrap()?.offers` or `bootstrap.offers` via `bootstrap()` / `onBootstrapChange`.</Table.Td>
+      <Table.Td>Offers come inside bootstrap; no separate endpoint.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.getTrialInfo()`</Table.Td>
+      <Table.Td>`paywall.getTrialStatus()` or `paywall.getAccess()`</Table.Td>
+      <Table.Td>Discriminated union — typed shape.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.setUserMetadata({...})`</Table.Td>
+      <Table.Td>Pass `userMeta` into `signInWith*`</Table.Td>
+      <Table.Td>In v3 metadata is written at sign-in; there's no separate setter.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.makeRequest({...})`</Table.Td>
+      <Table.Td>`billing.createApiGatewayClient().call({...})`</Table.Td>
+      <Table.Td>Returns a raw `Response`, not a wrapper. SSE works out of the box.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.abortRequest()`</Table.Td>
+      <Table.Td>`AbortController` via `signal` in `gateway.call({...})`</Table.Td>
+      <Table.Td>Web standard.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.modifyBalances({...})`</Table.Td>
+      <Table.Td>`billing.decrementBalanceLocal(queryType)`</Table.Td>
+      <Table.Td>Optimistic decrement only; server writes go through `gateway.call`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.renew()`</Table.Td>
+      <Table.Td>`paywall.open({ renew: true })`</Table.Td>
+      <Table.Td>Backend receives `ignoreActivePurchase: true`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Server-side `startCheckout`</Table.Td>
+      <Table.Td>`billing.createCheckout({...})` with `apiKey`</Table.Td>
+      <Table.Td>Same endpoint, now a typed wrapper.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Server-side `getPrices`</Table.Td>
+      <Table.Td>`billing.getPrices()` or `paywall.getPrices()`</Table.Td>
+      <Table.Td>Locales applied automatically.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Server-side `getCustomerPortal`</Table.Td>
+      <Table.Td>`billing.getCustomerPortalUrl()`</Table.Td>
+      <Table.Td>See [Customer portal](/docs-v2/sdk-v3/customer-portal).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Server-side `withdrawTokens`</Table.Td>
+      <Table.Td>Raw `POST /api/v1/withdraw-tokens` with `X-Api-Key` — no SDK wrapper. Or use `ApiGatewayClient.call()` when our proxy can talk to the provider for you.</Table.Td>
+      <Table.Td>See [Headless / server-side → Token withdrawal](/docs-v2/sdk-v3/headless-server#token-withdrawal).</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Event equivalents
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>v2 (`message` event with state)</Table.Th>
+      <Table.Th>v3 (`paywall.on`)</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`purchase_status: 'paid'`</Table.Td>
+      <Table.Td>`purchase_completed`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`purchase_status: 'failed'`</Table.Td>
+      <Table.Td>`purchase_failed`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`purchase_status_reason: 'restored' \| 'active-payment-found'`</Table.Td>
+      <Table.Td>`purchase_completed` with `restored: true`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`auth_status: 'signed-in'`</Table.Td>
+      <Table.Td>`authChange` with `event: 'SIGNED_IN'`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`auth_status: 'signed-out'`</Table.Td>
+      <Table.Td>`authChange` with `event: 'SIGNED_OUT'`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_status: 'visible'`</Table.Td>
+      <Table.Td>`open` + `ready`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_status: 'invisible'` + `'closed-by-user'`</Table.Td>
+      <Table.Td>`close`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_status_reason: 'openings-trial' \| 'time-trial'`</Table.Td>
+      <Table.Td>`trial_blocked` (modal **does not open** in v3)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_status_reason: 'country-not-match' \| 'visibility-turned-off'`</Table.Td>
+      <Table.Td>`visibility_blocked` (modal **does not open** in v3)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_status_reason: 'error'`</Table.Td>
+      <Table.Td>`error` with a `PaywallError`</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Auth: what changes
+
+v2 ran auth inside an iframe on appbox.space — tokens lived in cookies of that origin and your code couldn't see them. v3 uses Bearer tokens in `AuthClient` stored in `localStorage` (web) / `chrome.storage.local` (extension). That gives you:
+
+- ✅ Working Chrome extensions and Telegram Mini Apps (cookies are either forbidden or partitioned there).
+- ✅ Direct access to `access_token` for requests to **your** backend (`Authorization: Bearer …`).
+- ✅ Typed events `INITIAL_SESSION / SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED / USER_UPDATED / PASSWORD_RECOVERY`.
+- ⚠️ Sensitivity to host-page XSS — tokens are reachable to JS. See [Security](/docs-v2/sdk-v3/security#token-storage-and-xss) for mitigations.
+
+### What to do
+
+1. If you had your own backend auth — in v3 you can stay in **hybrid identity** mode (`identity: { email, userId }` without managed-auth) or switch to our `AuthClient` (`auth: true`). Hybrid is convenient when the user is already signed in via your app.
+2. If you used `paywall.open({ resolveEvent: 'signed-in' })` for the login flow — it's now `paywall.openSignin()` + `paywall.on('authChange', cb)`.
+3. If you kept `appbox.space` cookies somewhere for server-side recovery — no longer needed. Bearer and the server-side `apiKey` (on `BillingClient`) fully replace it.
+
+## Chrome Extension
+
+v2 does **not work** in Chrome MV3 — CWS review forbids remote code execution and `wall.x.x.js` is loaded from appbox.space on the fly. The only path is SDK 3.0 + the dedicated `@monetize.software/sdk-extension` package with an offscreen document.
+
+See the dedicated guide: [Quickstart → Chrome Extension](/docs-v2/sdk-v3/quickstart#chrome-extension-mv3) and [Installation → Chrome Extension](/docs-v2/sdk-v3/installation#chrome-extension-mv3).
+
+## CSP
+
+v2 required allowing an iframe on `appbox.space`. v3 doesn't need that, but your `apiOrigin` (custom_domain) shows up — add it to `connect-src`:
+
+<Tabs items={['v2', 'v3']}>
+<Tabs.Tab>
+
+```http
+Content-Security-Policy:
+  script-src 'self' https://appbox.space;
+  frame-src https://appbox.space;
+  connect-src https://appbox.space;
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```http
+Content-Security-Policy:
+  script-src 'self';
+  connect-src 'self' https://pay.your-domain.com;
+  img-src 'self' https://pay.your-domain.com data:;
+  style-src 'self' 'unsafe-inline';
+```
+
+`'unsafe-inline'` in `style-src` is required because Shadow DOM SDK injects its Tailwind bundle as a `<style>` tag. CSP nonces are not supported yet — known limitation. If your security policy strictly forbids `unsafe-inline`, stay on v2 for now.
+
+</Tabs.Tab>
+</Tabs>
+
+## Can both SDKs run side by side?
+
+**On the same paywall** — no: one paywall = one channel (`sdk_version` is stored in the DB; the online server serializes bootstrap for the right format). Flipping between channels is fine, but at any moment the paywall is either v2 or v3.
+
+**On two different paywalls (e.g. staging vs prod)** — yes, easy. The same `paywallId` cannot be served to both SDKs simultaneously; different `paywallId`s are fine.
+
+## Post-migration checklist
+
+- [ ] All `<script src="...appbox.space/...">` tags removed from HTML.
+- [ ] `apiOrigin` points at your [custom domain](/docs-v2/custom-domains).
+- [ ] `user.paid` → `user.has_active_subscription` everywhere (grep the codebase).
+- [ ] `window.addEventListener('message', ...)` handlers replaced with `paywall.on(...)`.
+- [ ] If you used `setUserMetadata`, `userMeta` is passed into auth methods.
+- [ ] CSP: `connect-src` includes `apiOrigin`, `frame-src appbox.space` is removed.
+- [ ] [Security → Production checklist](/docs-v2/sdk-v3/security#production-checklist) is green.
+- [ ] Webhook handler still works (payload format does not depend on the SDK channel).
+- [ ] `paywall.open()` → `purchase_completed` → unlock tested on the test payment processor.
+
+## See also
+
+<Cards>
+  <Cards.Card title="Quickstart" href="/docs-v2/sdk-v3/quickstart" description="Minimal 5-minute integration — web / extension / headless." />
+  <Cards.Card title="Installation" href="/docs-v2/sdk-v3/installation" description="npm, CDN, manifest.json for extensions." />
+  <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="bootstrap, getUser, createCheckout — new API surface." />
+  <Cards.Card title="Events" href="/docs-v2/sdk-v3/events" description="Full event list with payloads." />
+  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="Everything that used to live under the legacy 'Server-Side SDK' section, mapped onto v3." />
+  <Cards.Card title="SDK v2 (legacy)" href="/docs-v2/sdk-v2/quickstart" description="Staying on v2? The docs are still current." />
+</Cards>

@@ -1,0 +1,190 @@
+import { Callout, Table } from 'nextra/components';
+
+# Security
+
+SDK 3.0 is designed for public clients — browsers, Chrome extensions, Telegram Mini Apps. This page covers defensive assumptions, known trade-offs, and best practices for integrators.
+
+## Threat model
+
+What we defend against:
+- Charging other people's accounts / draining their quotas (defended via Bearer resolution on the backend).
+- Forged checkout URLs (server-driven, the SDK doesn't sign anything).
+- Cross-popup OAuth attacks (PKCE state nonce + popup-name matching).
+
+What we don't defend against:
+- XSS on the host page — if an attacker runs JS in your origin, the tokens are theirs (see below).
+- Reverse engineering the bundle — it's public code; any "API key" hardcoded inside is useless (for server-side keys there's an `apiKey` option with a runtime warning).
+- Attacks on the platform's auth backend — out of scope for the SDK.
+
+## Token storage and XSS
+
+By default `AuthClient` stores `access_token` and `refresh_token` in `localStorage` (web) or `chrome.storage.local` (extension). This is a deliberate trade-off:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Approach</Table.Th>
+      <Table.Th>For</Table.Th>
+      <Table.Th>Against</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**localStorage** (default)</Table.Td>
+      <Table.Td>Survives reloads, works in Chrome extensions, no cookie issues with SameSite/iframe</Table.Td>
+      <Table.Td>Available to any JS on the page → XSS leaks it</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>HttpOnly cookies</Table.Td>
+      <Table.Td>JS can't see the token; XSS won't leak it immediately</Table.Td>
+      <Table.Td>Doesn't work in Chrome extensions; cross-origin headaches; SDK 3.0 is intentionally cookie-free</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>sessionStorage</Table.Td>
+      <Table.Td>Doesn't survive reload (smaller attack window)</Table.Td>
+      <Table.Td>User logs in again on every new tab — UX hurt</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>In-memory only</Table.Td>
+      <Table.Td>Minimum attack surface</Table.Td>
+      <Table.Td>Reload = logout, useless for most SaaS</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+**Mitigations built into the SDK:**
+
+1. **Refresh-token rotation on the backend** — every successful refresh invalidates the previous refresh token. A leaked refresh token is likely already invalid by the time the attacker uses it (if the victim refreshed at least once after the leak).
+2. **Short access-token lifetime** — 1 hour. A leaked access token can't be extended without the refresh token.
+3. **`destroy()` on teardown** — on hot reload / SPA route changes, storage subscriptions are removed so no dangling references hold stale tokens.
+
+**What the host should do:**
+
+1. **CSP** — `Content-Security-Policy: script-src 'self' <whitelist>` blocks unknown JS injection (the main XSS vector).
+2. **Subresource integrity for CDN scripts** — if you use `<script src="https://cdn.example.com/...">`, add `integrity="sha256-..."` so a CDN compromise can't inject an XSS payload.
+3. **Sanitize user-generated content** — never render `innerHTML` without `DOMPurify`, never use `dangerouslySetInnerHTML` without validation.
+4. **Secure cookies for your own backend** — Bearer in SDK 3.0 is for OUR API. For YOUR API calls use your own auth (cookies/session).
+
+```ts
+import { AuthClient, type StorageAdapter } from '@monetize.software/sdk/core';
+
+// Replace storage with in-memory — for high-security environments (enterprise).
+// The user will log in on every page load — this is a compromise.
+const memoryStorage: StorageAdapter = (() => {
+  const m = new Map<string, string>();
+  return {
+    async getItem(k) { return m.get(k) ?? null; },
+    async setItem(k, v) { m.set(k, v); },
+    async removeItem(k) { m.delete(k); }
+  };
+})();
+
+const auth = new AuthClient({
+  paywallId: 'pw_123',
+  storage: memoryStorage
+});
+```
+
+## Bearer vs API key vs X-User-ID
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Method</Table.Th>
+      <Table.Th>Where to use</Table.Th>
+      <Table.Th>SDK check</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Bearer** (`AuthClient`)</Table.Td>
+      <Table.Td>Browser, extension — the main path. Backend resolves user.id securely from the token; can't be spoofed.</Table.Td>
+      <Table.Td>None — this is the safe default.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**`apiKey`**</Table.Td>
+      <Table.Td>**Server-side only** (Node, Deno, Bun, Edge). Server-SDK key from the platform.</Table.Td>
+      <Table.Td>`console.error` in browsers (`window.document` detection) — you can't leak a key into a bundle.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**`X-User-ID`** (`ApiGatewayClient.userId`)</Table.Td>
+      <Table.Td>Headless server scenario with a trusted user.id from your backend.</Table.Td>
+      <Table.Td>`console.warn` in browsers without `auth` — a client could spoof somebody else's ID; the backend checks Bearer more strictly.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+```ts
+// ❌ In the browser — the SDK warns
+const billing = new BillingClient({
+  paywallId: 'pw_123',
+  apiKey: 'sk_live_...' // SECURITY: BillingClient.apiKey detected in browser
+});
+
+// ✅ In Node — fine
+// server.ts (Express handler)
+const billing = new BillingClient({
+  paywallId: 'pw_123',
+  apiKey: process.env.MONETIZE_API_KEY
+});
+```
+
+For end-to-end server-side patterns (per-user Bearer, storage adapters, webhook handlers, token withdrawal) — see [Headless / server-side](/docs-v2/sdk-v3/headless-server).
+
+## Custom `fetch`
+
+`BillingClient`, `AuthClient`, `ApiGatewayClient` accept `fetch?: typeof fetch` in their options. Convenient for tests / undici / proxies, but unsafe with untrusted code:
+
+<Callout type="warning">
+  A custom fetch sees `Authorization: Bearer ...` on every request. Never pass a fetch from untrusted packages (npm deps with auto-updates, CDN scripts). If you do use a custom fetch — don't log `init.headers` in production.
+</Callout>
+
+## OAuth popup and postMessage
+
+`signInWithOAuth` opens a popup → callback → `postMessage`. The cross-popup attack defence is a PKCE state nonce generated locally and passed via `popup.name = pw-oauth-<state>`. `postMessage` origin is **not** validated (the callback page sends `targetOrigin: '*'` because of COOP restrictions), but the state nonce is unique per popup and unguessable.
+
+**What this protects:**
+- A background popup on another page sending you a postMessage with a forged code — it fails the state check.
+
+**What this does NOT protect:**
+- XSS on your page — if attacker has JS access they can also listen for postMessage. Covered by general anti-XSS (CSP + sanitize).
+
+## Cross-context auth in extensions
+
+See [auth/session → Cross-context sync](/docs-v2/sdk-v3/auth/session#cross-context-sync-multi-tab--chrome-extension). In short: in a Chrome extension the session is shared across all contexts via `chrome.storage.local`. If the **content script is untrusted** (the user is on a hostile page), Bearer should only live in the background — the content script talks to background via `chrome.runtime.sendMessage` and only the background does fetches with Authorization.
+
+```ts
+// content-script.ts (UNTRUSTED — can run on any page)
+chrome.runtime.sendMessage({ type: 'gateway.call', providerId, body }, (res) => {
+  /* ... */
+});
+
+// background.ts (trusted)
+import { AuthClient, BillingClient } from '@monetize.software/sdk/core';
+const auth = new AuthClient({ paywallId: 'pw_123' });
+const billing = new BillingClient({ paywallId: 'pw_123', auth });
+const gateway = billing.createApiGatewayClient();
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type !== 'gateway.call') return;
+  gateway.call(msg).then((r) => r.json()).then(sendResponse);
+  return true;
+});
+```
+
+## Idempotency
+
+To prevent double-clicks / retries over unreliable networks from double-charging or duplicating records:
+
+- `createCheckout({idempotencyKey})` — required in production. The SDK deduplicates parallel clicks by `priceId` automatically, but second-or-two retries — no.
+- `signUp({idempotencyKey})` / `signInWithEmail({idempotencyKey})` — protection against double-submit in forms. Treat it as a hint to our façade validation rather than a strict guarantee on the auth backend.
+- `gateway.call({...})` — no idempotency yet. A double-click on a CTA in an AI app = two requests = two credits. If this matters, dedupe on the UI side (disable the button until the response).
+
+## Production checklist
+
+- [ ] CSP configured (`script-src` whitelist).
+- [ ] `apiKey` NOT in the client bundle (CI grep check).
+- [ ] `paywall.destroy()` / `auth.destroy()` called on teardown.
+- [ ] `idempotencyKey` passed into `createCheckout` (UUID v4).
+- [ ] If threat model is high — considered an in-memory storage adapter.
+- [ ] HTTPS everywhere (no HTTP in production).

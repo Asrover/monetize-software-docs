@@ -1,0 +1,459 @@
+import { Callout, Cards, Tabs, Steps, Table } from 'nextra/components';
+
+# Headless / server-side
+
+SDK 3.0 works on the server (Node, Bun, Deno, Cloudflare Workers, Edge functions) without any UI. This is the modern equivalent of the legacy "Server-Side SDK" — same endpoints, typed wrappers, and one extra surface: the metered API Gateway.
+
+<Callout type="info">
+  **Backend not on a JS runtime?** (Python, Go, PHP, Ruby, .NET, Rust…) — the SDK is JS-only, but the underlying contract is plain HTTPS. See the [REST API reference](/docs-v2/sdk-v3/rest-api) for endpoint specs and `curl` examples.
+</Callout>
+
+<Callout type="info">
+  **One auth path for headless integrations: `apiKey` + `identity`.** The server-SDK key from the dashboard identifies *you* (the paywall owner); `identity.email` (or `identity.userId`) names the user you're acting on behalf of. Every server method — `createCheckout`, `getCustomerPortalUrl`, `listPurchases`, `cancelSubscription`, `createSupportTicket`, token withdrawal — accepts this combination. You don't need to register users in monetize.software's auth.
+</Callout>
+
+## When you need this
+
+- **Custom checkout UX** — your own pricing page, you create checkout sessions on the backend and redirect users.
+- **Customer portal** — your own UI for cancel/renew/payment-history.
+- **Metered AI billing** — your backend already talks to OpenAI/Anthropic (you own the provider keys); after each successful call, debit credits from the user's balance via `withdrawTokens` (a single HTTP call).
+- **Webhook fan-out** — receive Stripe/Paddle/Freemius webhooks, persist subscription state in your DB, then notify your app.
+- **Server-rendered access checks** — read `has_active_subscription` in a Next.js Server Component / Remix loader.
+
+## Install
+
+```bash
+pnpm add @monetize.software/sdk
+```
+
+Import from `core` to skip the UI bundle:
+
+```ts
+import {
+  AuthClient,
+  BillingClient,
+  ApiGatewayClient,
+  QuotaExceededError,
+  PaywallError
+} from '@monetize.software/sdk/core';
+```
+
+`core` is ≤ 8 KB gz with zero Preact dependencies — safe for Edge functions.
+
+## API key — get one
+
+Dashboard → **Settings** → **API keys** → **Create**. Copy the `sk_…` string; it appears once. The key is bound to your account; it can act on any paywall you own.
+
+<Callout type="warning">
+  **Never put `apiKey` into client code.** The SDK detects `window.document` and logs `[paywall] SECURITY: BillingClient.apiKey detected in browser context` on construction. Treat the key like a secret — read it from env, not from a bundle.
+</Callout>
+
+## Initialization
+
+<Tabs items={['Per-request (recommended for serverless)', 'Singleton (long-running worker)']}>
+<Tabs.Tab>
+
+For Lambda / Edge functions that live for one request — create a fresh `BillingClient` per handler:
+
+```ts
+import { BillingClient } from '@monetize.software/sdk/core';
+
+export async function POST(req: Request) {
+  const billing = new BillingClient({
+    paywallId: process.env.PAYWALL_ID!,
+    apiOrigin: process.env.PAYWALL_ORIGIN!,
+    apiKey: process.env.MONETIZE_API_KEY!
+  });
+
+  const { url } = await billing.createCheckout({
+    priceId: 'price_123',
+    // ...
+  });
+  return Response.json({ url });
+}
+```
+
+No shared state, nothing to clean up.
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+For a long-running Node worker — instantiate once at boot:
+
+```ts
+// src/monetize.ts
+import { BillingClient } from '@monetize.software/sdk/core';
+
+export const billing = new BillingClient({
+  paywallId: process.env.PAYWALL_ID!,
+  apiOrigin: process.env.PAYWALL_ORIGIN!,
+  apiKey: process.env.MONETIZE_API_KEY!
+});
+
+// graceful shutdown — close before exit
+process.once('SIGTERM', () => billing.destroy());
+```
+
+`BillingClient` is stateless w.r.t. users when only `apiKey` is configured — the same instance can serve every request. Call `billing.setIdentity({ email, userId })` immediately before each user-scoped method (`createCheckout`, `listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`).
+
+</Tabs.Tab>
+</Tabs>
+
+## Server-side billing methods
+
+Everything in `BillingClient` works server-side. The methods that traditionally lived in the legacy "Server-Side SDK":
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>SDK method</Table.Th>
+      <Table.Th>Endpoint</Table.Th>
+      <Table.Th>Auth</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`billing.createCheckout({...})`</Table.Td>
+      <Table.Td>`POST /api/v1/paywall/[id]/start-checkout`</Table.Td>
+      <Table.Td>`apiKey` (or Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`billing.getPrices({...})`</Table.Td>
+      <Table.Td>`GET /api/v1/paywall/[id]/bootstrap`</Table.Td>
+      <Table.Td>public</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`billing.getCustomerPortalUrl()`</Table.Td>
+      <Table.Td>`POST /api/v1/paywall/[id]/get-customer-portal`</Table.Td>
+      <Table.Td>`apiKey` (or Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`billing.createSupportTicket({...})`</Table.Td>
+      <Table.Td>`POST /api/v1/paywall/[id]/support/ticket`</Table.Td>
+      <Table.Td>`apiKey` (or Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`billing.listPurchases()`</Table.Td>
+      <Table.Td>`GET /api/v1/paywall/[id]/user`</Table.Td>
+      <Table.Td>`apiKey` + `identity` (or Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`billing.cancelSubscription({...})`</Table.Td>
+      <Table.Td>`POST /api/paywall/cancel-subscription`</Table.Td>
+      <Table.Td>`apiKey` + `identity` (or Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**no SDK wrapper** — raw `fetch`</Table.Td>
+      <Table.Td>`POST /api/v1/withdraw-tokens`</Table.Td>
+      <Table.Td>`X-Api-Key`</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Create a checkout from your backend
+
+```ts
+const checkout = await billing.createCheckout({
+  priceId: 'price_123',
+  successUrl: 'https://app.example.com/success?session=__SESSION__',
+  errorUrl: 'https://app.example.com/checkout-failed',
+  // Identity (email + your stable userId) is set on BillingClient via
+  // billing.setIdentity(...) before this call — see the Initialization section.
+  idempotencyKey: crypto.randomUUID() // mandatory for production
+});
+
+return Response.redirect(checkout.url, 303);
+```
+
+With `apiKey` you can call `createCheckout` for **any** user — pass their email via `billing.setIdentity({ email })` before the call. Without identity the call throws `identity_required`.
+
+### Get prices
+
+```ts
+const prices = await billing.getPrices();
+return Response.json({ prices });
+```
+
+Locale overrides are applied automatically based on `bootstrap.settings.locale_default`. For per-user locale, pass `Accept-Language` via a custom `fetch` — or skip and resolve locale in your frontend.
+
+### Customer portal URL
+
+```ts
+billing.setIdentity({ email: req.user.email });
+const { url } = await billing.getCustomerPortalUrl();
+return Response.json({ url });
+```
+
+For Stripe/Paddle/Chargebee the response is a one-time login URL to the acquirer-hosted portal. Freemius doesn't have a hosted portal — the backend returns `forbidden` (`status: 403`). See [Customer portal](/docs-v2/sdk-v3/customer-portal).
+
+### Create a support ticket
+
+```ts
+const { ticket } = await billing.createSupportTicket({
+  subject: 'Refund request',
+  content: 'I would like to cancel and request a refund...',
+  email: req.user.email,
+  files: [pdfFile] // optional — switches to multipart/form-data
+});
+return Response.json({ ticketId: ticket.id });
+```
+
+Bearer auth, if present, ignores the `email` field and uses the session email (anti-spoofing). With `apiKey` only — `email` (or `identity.email`) is mandatory.
+
+## Token withdrawal
+
+The endpoint exists, but there's no SDK wrapper. Call it directly when your backend talks to OpenAI/Anthropic on its own and only needs to debit credits from the user's balance:
+
+```ts
+async function withdrawTokens({
+  paywallId,
+  userId,
+  tokens,
+  tokenType = 'standard'
+}: {
+  paywallId: string;
+  userId: string;
+  tokens: number;
+  tokenType?: string;
+}): Promise<{ remaining: number }> {
+  const res = await fetch(`${process.env.PAYWALL_ORIGIN}/api/v1/withdraw-tokens`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': process.env.MONETIZE_API_KEY!
+    },
+    body: JSON.stringify({
+      paywall_id: paywallId,
+      user_id: userId,
+      tokens,
+      token_type: tokenType
+    })
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `withdraw-tokens failed (${res.status})`);
+  }
+  return res.json(); // { success: true, remaining: number }
+}
+```
+
+**Request body:**
+
+```json
+{
+  "paywall_id": "123",
+  "user_id": "user-uuid",
+  "tokens": 5,
+  "token_type": "standard"
+}
+```
+
+**Response (200):** `{ success: true, remaining: number }` — `remaining` is the new balance for `token_type`.
+
+**Errors:**
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Status</Table.Th>
+      <Table.Th>Cause</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>401</Table.Td>
+      <Table.Td>`X-Api-Key` missing or invalid</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>403</Table.Td>
+      <Table.Td>API key inactive, or the key owner is not the paywall creator</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>400</Table.Td>
+      <Table.Td>`paywall_id` / `user_id` missing, `tokens <= 0`, or balance insufficient</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>404</Table.Td>
+      <Table.Td>Paywall or user not found</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **Tokenized paywalls only.** Works only when the paywall has `tokenization` enabled and at least one configured `token_type`. For "regular" subscription paywalls — meaningless.
+</Callout>
+
+### Why not `ApiGatewayClient` server-side?
+
+The gateway exists so browser-only apps (SPA, Chrome extension, Telegram Mini App) can do metered AI without shipping `OPENAI_API_KEY` to the client. If you already have a backend, your backend has the provider keys — calling our gateway from there would just add a network hop. Talk to OpenAI/Anthropic directly and debit via `withdrawTokens` after success.
+
+## Listing purchases and cancelling subscriptions
+
+Both `listPurchases()` and `cancelSubscription()` work with `apiKey` + `identity` — pass the user's email (or your stable `userId`) and operate on them from your backend:
+
+```ts
+billing.setIdentity({ email: user.email, userId: user.id });
+
+const purchases = await billing.listPurchases();
+// purchases: PaywallPurchaseDetailed[] — rich shape with status, intervals, prices
+
+await billing.cancelSubscription({
+  subscriptionId: purchases[0].id,
+  reason: 'too expensive'
+});
+```
+
+The backend verifies that the identity is linked to your paywall — owner of paywall A can't query or cancel subscriptions of users who never interacted with paywall A. Across paywalls is impossible by design.
+
+For most integrations you don't need `listPurchases` at all — webhooks (`subscription.created/updated/cancelled`) give you authoritative state in your own DB. Use `listPurchases` when you want fresh state on demand without waiting for webhook delivery (e.g., right after a checkout-success redirect).
+
+For `cancelSubscription`, the alternative is `getCustomerPortalUrl()` — redirect the user to the acquirer's hosted portal (Stripe/Paddle/Chargebee/Overpay). Use it when you don't want to build cancel UX yourself. Freemius has no hosted portal — `getCustomerPortalUrl()` returns 403 there, so for Freemius you call `cancelSubscription()` directly.
+
+## Server-rendered access checks
+
+For Next.js Server Components / Remix loaders, read `has_active_subscription` directly without instantiating a UI:
+
+```ts
+// app/dashboard/page.tsx
+import { BillingClient } from '@monetize.software/sdk/core';
+
+export default async function Dashboard() {
+  const user = await yourAuth.requireUser(); // your own session check
+  if (!user) return <SignInPrompt />;
+
+  const billing = new BillingClient({
+    paywallId: process.env.PAYWALL_ID!,
+    apiOrigin: process.env.PAYWALL_ORIGIN!,
+    apiKey: process.env.MONETIZE_API_KEY!,
+    identity: { email: user.email, userId: user.id }
+  });
+
+  const paywallUser = await billing.getUser();
+  if (!paywallUser.has_active_subscription) return <UpgradePrompt />;
+
+  return <PremiumDashboard />;
+}
+```
+
+Most integrations have authoritative state in their own DB already (synced via webhooks) — you typically read straight from there, no SDK call needed. Use `billing.getUser()` when you want a fresh check right after the user came back from checkout, or when your webhook handler hasn't run yet.
+
+<Callout type="info">
+  **No storage adapter needed in this scenario.** `apiKey` lives in env, `identity` comes from your auth per request, subscription state lives in your DB (via webhooks). The SDK's in-memory default is fine for one-shot calls and long-running workers alike. See [Storage adapters](/docs-v2/sdk-v3/storage) only if you're doing something unusual (e.g., your own caching layer).
+</Callout>
+
+## Webhooks
+
+Server-side billing pairs with webhooks for source-of-truth state. Front-end events update UX, but webhooks update your DB. See:
+
+- [Webhooks → Create](/docs-v2/webhooks/create-webhook) — endpoint setup.
+- [Webhooks → Events](/docs-v2/webhooks/events) — full payload format and signing.
+- [Quickstart → Web](/docs-v2/guide/sdk-v3-web#sync-subscriptions-on-your-backend) — Node/Next.js handler example.
+
+```ts
+// Minimal Node webhook handler — verify HMAC-SHA256, persist subscription
+import crypto from 'node:crypto';
+
+export async function POST(req: Request) {
+  const raw = await req.text();
+  const sig = req.headers.get('x-signature') ?? '';
+  const expected = crypto
+    .createHmac('sha256', process.env.MONETIZE_WEBHOOK_SECRET!)
+    .update(raw)
+    .digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    return new Response('bad signature', { status: 401 });
+  }
+
+  const event = JSON.parse(raw);
+  switch (event.type) {
+    case 'subscription.created':
+    case 'subscription.updated':
+      await upsertSubscription(event.data.user.email, event.data.subscription);
+      break;
+    case 'subscription.cancelled':
+      await markCancelled(event.data.user.email);
+      break;
+  }
+  return new Response('ok');
+}
+```
+
+## Custom `fetch`
+
+`BillingClient`, `AuthClient`, `ApiGatewayClient` all accept `fetch?: typeof fetch` — pass `undici` on Node 18 for connection pooling, or a Cloudflare-specific fetch wrapper for KV-bound logging:
+
+```ts
+import { fetch as undiciFetch } from 'undici';
+
+const billing = new BillingClient({
+  paywallId,
+  apiOrigin,
+  apiKey,
+  fetch: undiciFetch as typeof fetch
+});
+```
+
+<Callout type="warning">
+  Custom fetch sees `X-Api-Key` and `Authorization: Bearer ...` on every request. Never pass a fetch implementation you don't fully control — and don't log `init.headers` in production.
+</Callout>
+
+## Error handling
+
+Same `PaywallError` / `QuotaExceededError` taxonomy as the browser SDK. Codes most relevant to server flows:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>What happened</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`identity_required`</Table.Td>
+      <Table.Td>`createCheckout` / `getCustomerPortalUrl` without `identity.email` (and no Bearer)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity_not_on_paywall` (`status: 404`)</Table.Td>
+      <Table.Td>`listPurchases` / `cancelSubscription` for an identity (email/userId) not linked to this paywall — owner can only act on users that interacted with the paywall.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`already_purchased` (`status: 409`)</Table.Td>
+      <Table.Td>`createCheckout` for a user that already has an active subscription. Retry with `ignoreActivePurchase: true` for upgrade/renewal.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`forbidden` (`status: 403`)</Table.Td>
+      <Table.Td>`getCustomerPortalUrl` for an acquirer without a hosted portal (Freemius) or with no active subscription</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`not_enough_queries` (`status: 402`, `QuotaExceededError`)</Table.Td>
+      <Table.Td>`gateway.call` — quota exhausted</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+Full catalogue — in [Error codes](/docs-v2/sdk-v3/errors).
+
+## Production checklist
+
+- [ ] `apiKey` is read from a secret manager (env var, KMS, Vault) — never hardcoded.
+- [ ] `apiOrigin` is your custom domain, not `appbox.space` and not a hardcoded fallback.
+- [ ] Every `createCheckout` call has a fresh `idempotencyKey` (UUID v4) — protects against double-submits on flaky networks.
+- [ ] Storage adapter is **per-user** when using Bearer auth in a long-running worker.
+- [ ] `BillingClient.destroy()` is called on graceful shutdown (`SIGTERM`).
+- [ ] Webhook handler verifies HMAC-SHA256 and is idempotent — Paddle re-sends `subscription.updated`.
+- [ ] HTTPS everywhere; no plaintext `X-Api-Key` on the wire.
+- [ ] CI grep check: no `apiKey` substring in the client bundle.
+- [ ] Logs scrub `Authorization` and `X-Api-Key` headers before shipping to Datadog/Sentry.
+
+## See also
+
+<Cards>
+  <Cards.Card title="BillingClient API" href="/docs-v2/sdk-v3/bootstrap" description="Method-by-method reference: createCheckout, getCustomerPortalUrl, listPurchases, cancelSubscription" />
+  <Cards.Card title="API Gateway" href="/docs-v2/sdk-v3/api-gateway" description="Metered AI proxy, streaming, headless ApiGatewayClient with userId" />
+  <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Building your own subscription management UI" />
+  <Cards.Card title="Storage adapters" href="/docs-v2/sdk-v3/storage" description="Redis / KV / encrypted storage for server-side persistence" />
+  <Cards.Card title="Security" href="/docs-v2/sdk-v3/security" description="Bearer vs apiKey vs X-User-ID, threat model, custom fetch warnings" />
+  <Cards.Card title="Webhooks" href="/docs-v2/webhooks/events" description="Source of truth for subscription state — signing and payload format" />
+</Cards>

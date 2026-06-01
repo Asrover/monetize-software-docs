@@ -9,7 +9,7 @@ import {
 # Paywall Trial
 
 <Callout type="warning">
-  This feature only available when paywall is in client mode. In server mode you can set subscription-based trial. [Read more](/docs-v2/server-side-sdk/start-checkout).
+  This feature only available when paywall is in client mode. In server mode you can set subscription-based trial. [Read more](/docs-v2/sdk-v2/server-side/start-checkout).
 </Callout>
 
 Learn how to configure trial periods for your paywall to give users free access before requiring payment. Paywall trials help increase conversion rates by allowing users to experience your product's value.
@@ -149,74 +149,25 @@ Set up free trial period after users provide payment details:
 
 </Steps>
 
-## Trial Implementation Details 
+## SDK Implementation
 
-### Time-Based Trial Flow
+Trial state is stored locally per device (browser storage / `chrome.storage`). The exact SDK surface differs:
 
-When a user performs a "paid action" and `paywall.open()` is called:
-
-```mermaid
-flowchart TD
-    A["User calls paywall.open()"] --> B{"First call<br/>in session?"}
-    
-    B -->|Yes| C["Save timestamp to<br/>localStorage"]
-    B -->|No| D["Read timestamp from<br/>localStorage"]
-    
-    C --> E["Allow access<br/>(trial active)"]
-    
-    D --> F{"Has 24 hours<br/>passed?"}
-    
-    F -->|No| E
-    F -->|Yes| G["Show paywall"]
-    
-    E --> H["User uses<br/>features for free"]
-    
-    G --> I["User must<br/>purchase subscription"]
-```
-
-**Technical Details:**
-
-1. **First opening** - timestamp is saved to browser's `localStorage` or `chrome storage`
-2. **Subsequent openings** - check if the set time period has passed (e.g., 24 hours)
-3. **After expiration** - `paywall.open()` returns an error with `visibility_reason = 'trial-time'`
-4. **Data storage** - trial data is stored locally in the user's browser
-
-### Action-Based Trial Flow
-
-Similar flow for action-based trial, but tracks action counter instead:
-
-```mermaid
-flowchart TD
-    A["User calls paywall.open()"] --> B{"Counter exists<br/>in localStorage?"}
-    
-    B -->|No| C["Create counter = 1<br/>in localStorage"]
-    B -->|Yes| D["Read counter from<br/>localStorage"]
-    
-    C --> E["Allow access<br/>(trial active)"]
-    
-    D --> F["Increment counter by 1"]
-    
-    F --> G{"Counter > 5<br/>allowed actions?"}
-    
-    G -->|No| H["Save new counter<br/>to localStorage"]
-    G -->|Yes| I["Show paywall"]
-    
-    H --> E
-    
-    E --> J["User uses<br/>features for free"]
-    
-    I --> K["User must<br/>purchase subscription"]
-```
-
-**Technical Details:**
-
-1. **Action counter** - stored in `localStorage` or `chrome storage` and incremented with each call
-2. **Limit check** - when exceeding the set number of actions (e.g., 5)
-3. **After exceeding** - `paywall.open()` returns an error with `visibility_reason = 'trial-actions'`
-4. **Counter reset** - only happens when localStorage is cleared or on fresh installation
+<Cards>
+  <Cards.Card
+    title="SDK v3 — PaywallUI trial events"
+    href="/docs-v2/sdk-v3/trial"
+    description="`trial_blocked` / `trial_expired` events, `paywall.getAccess({ skipTrial })`, programmatic check before open()"
+  />
+  <Cards.Card
+    title="SDK v2 (legacy) — visibility_reason errors"
+    href="/docs-v2/sdk-v2/client-side/trial"
+    description="localStorage flow, `paywall.open()` rejects with `visibility_reason = 'trial-time' | 'trial-actions'`"
+  />
+</Cards>
 
 <Callout type="warning">
-  **Important:** Trial data is stored in the browser's `localStorage` or `chrome storage`. If the user clears their browser or uses incognito mode, the trial may reset.
+  **Important:** Trial data is stored in the browser's `localStorage` / `chrome.storage` in both SDKs. Clearing browser data or using incognito mode resets the trial counter.
 </Callout>
 
 ## Trial Strategy Best Practices
@@ -240,16 +191,16 @@ flowchart TD
 After configuring trials:
 
 <Cards>
-  <Cards.Card 
-    title="Paywall with trial guide" 
-    href="/docs-v2/guide/subscription-saas"
+  <Cards.Card
+    title="SDK v3 — Trial implementation"
+    href="/docs-v2/sdk-v3/trial"
   />
-  <Cards.Card 
-    title="Create customer portal" 
+  <Cards.Card
+    title="SDK v2 — Trial implementation"
+    href="/docs-v2/sdk-v2/client-side/trial"
+  />
+  <Cards.Card
+    title="Create customer portal"
     href="/docs-v2/paywall/customer-portal"
-  />
-  <Cards.Card 
-    title="Create offer" 
-    href="/docs-v2/offers/create-offer"
   />
 </Cards>

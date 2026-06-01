@@ -1,0 +1,417 @@
+import { Callout, Table, Tabs } from 'nextra/components';
+
+# Error codes
+
+Every SDK 3.0 error throws a `PaywallError` — a typed extension of `Error` with two extra fields: `code` (stable identifier) and `status` (HTTP status, if the error came from the network). This lets you write code that reacts to a specific case without parsing `message`.
+
+```ts
+import { PaywallError, QuotaExceededError } from '@monetize.software/sdk/core';
+
+try {
+  await billing.createCheckout({ priceId });
+} catch (e) {
+  if (e instanceof QuotaExceededError) {
+    paywall.open();
+    return;
+  }
+  if (e instanceof PaywallError && e.code === 'already_purchased') {
+    showRestoredView();
+    return;
+  }
+  throw e;
+}
+```
+
+## Shape
+
+```ts
+class PaywallError extends Error {
+  readonly code: string;       // stable identifier — base your handling on this
+  readonly status?: number;    // HTTP status when the error came from the network
+  readonly cause?: unknown;    // original response body — for context-aware logic
+}
+
+class QuotaExceededError extends PaywallError {
+  readonly code: 'not_enough_queries';
+  readonly status: 402;
+  readonly balances: Balance[];
+  readonly queryType: string;
+  readonly currentBalance: Balance | null;
+}
+```
+
+<Callout type="info">
+  **`message` is not a stable API.** The SDK may change phrasing in minor releases. Branch on `code` / `status` / `instanceof` only.
+</Callout>
+
+## Configuration and initialization
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>When</Table.Th>
+      <Table.Th>What to do</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`invalid_config`</Table.Td>
+      <Table.Td>`paywallId` or `apiOrigin` not passed; `apiOrigin` does not match `bootstrap.settings.custom_domain`; managed-auth call without a managed AuthClient.</Table.Td>
+      <Table.Td>Double-check the SDK init. `apiOrigin` must be the paywall's `custom_domain` from the dashboard — not `appbox.space` and not `localhost`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity_required`</Table.Td>
+      <Table.Td>A user-scoped method (`createCheckout`, `getCustomerPortalUrl`, `listPurchases`, `cancelSubscription`) was called without either a connected `AuthClient` or `apiKey` + `identity.email`/`identity.userId`.</Table.Td>
+      <Table.Td>Browser: wire `auth: true`. Server: pass `apiKey` and call `billing.setIdentity({ email, userId })` (or set `identity` in the constructor).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity_not_on_paywall`</Table.Td>
+      <Table.Td>`listPurchases` / `cancelSubscription` (apiKey path) for an identity that's never interacted with this paywall.</Table.Td>
+      <Table.Td>Verify the email/userId you pass; owner can only act on their own users. Cross-paywall lookup is blocked by design.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Network and transport
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`network_error`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>`fetch` could not reach the server (no internet, DNS, TLS, CORS preflight failed). The SDK does not auto-retry.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`aborted`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>The request was cancelled via `AbortSignal` (user closed the modal, host unmounted the component). Don't log it as an error — it's a user-driven cancellation.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`http_<N>`</Table.Td>
+      <Table.Td>4xx/5xx</Table.Td>
+      <Table.Td>Backend returned an error without a `code` in the body — fallback to `http_${status}` (e.g. `http_500`, `http_429`). The text is in `message`, the body in `cause`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`upstream`</Table.Td>
+      <Table.Td>502</Table.Td>
+      <Table.Td>Auth backend / acquirer returned 5xx. The backend passes it through as-is, no auto-retry in the SDK.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Auth — email & password
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`invalid_credentials`</Table.Td>
+      <Table.Td>401</Table.Td>
+      <Table.Td>`signInWithEmail` — wrong email or password.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`user_already_exists` / `email_exists`</Table.Td>
+      <Table.Td>400/422</Table.Td>
+      <Table.Td>`signUp` — email already registered. Fall back to `signInWithEmail` for a single-screen "login or signup" UX.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`weak_password`</Table.Td>
+      <Table.Td>400</Table.Td>
+      <Table.Td>`signUp` / `updatePassword` — password failed the platform's policy (min 6 chars by default).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`not_authenticated`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>`updatePassword` / `upgradeAnonymousToEmail` without an active session.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Auth — OTP & reset
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`invalid_email`</Table.Td>
+      <Table.Td>400</Table.Td>
+      <Table.Td>`sendOtp` / `requestPasswordReset` — email format check failed.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`over_email_send_rate_limit`</Table.Td>
+      <Table.Td>429</Table.Td>
+      <Table.Td>Too frequent `sendOtp` / `requestPasswordReset` — platform rate limit (~1/minute).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`invalid_otp`</Table.Td>
+      <Table.Td>401</Table.Td>
+      <Table.Td>`verifyOtp` — wrong code, expired code, or no OTP was sent for this email. Anti-enumeration: don't distinguish in UI.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`invalid_type`</Table.Td>
+      <Table.Td>400</Table.Td>
+      <Table.Td>`verifyOtp` — typo in `type` (not one of `'email' | 'recovery' | 'signup' | 'magiclink' | 'invite'`).</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Auth — OAuth
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`popup_blocked`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>`signInWithOAuth` was called outside a user gesture. Show a "Sign in with Google" button and require an explicit re-click.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_cancelled`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>User closed the popup before completion. Silently return to the login screen.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_failed`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>Provider returned an error (access denied, wrong client_id). Show "Couldn't sign in, try another method".</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_timeout`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>The popup didn't deliver a code within 5 minutes (user abandoned without closing).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_unavailable`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>SDK was called from Node.js or another runtime without `window` — developer bug.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`exchange_failed`</Table.Td>
+      <Table.Td>401</Table.Td>
+      <Table.Td>The auth backend rejected the code (stolen-from-logs code, state typo). "Session expired, try again."</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Auth — anonymous
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`anonymous_disabled`</Table.Td>
+      <Table.Td>403</Table.Td>
+      <Table.Td>`signInAnonymously()` — `allow_anonymous` is off in paywall settings. Enable it in the dashboard or hide the "Continue as guest" button.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Checkout & subscriptions
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When / What to do</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`already_purchased`</Table.Td>
+      <Table.Td>409</Table.Td>
+      <Table.Td>`createCheckout` — the user already has an active subscription (the backend blocks to avoid a double charge). PaywallUI flips into the restored success view automatically. In headless code — show "you already have a subscription" and offer `getCustomerPortalUrl()`. For renewal/upgrade flows, retry with `ignoreActivePurchase: true`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`checkout_failed`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>Emitted via `paywall.on('error', ...)` — PaywallRoot could not open the `checkoutUrl` or did not get a valid URL from the backend. Inspect `error.cause` for details.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`no_price`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>CTA button was pressed without a selected price. Happens when layout config is broken (price_grid without `priceIds`, cta_button without `priceId`). Bug in admin config.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`forbidden`</Table.Td>
+      <Table.Td>403</Table.Td>
+      <Table.Td>`getCustomerPortalUrl` — no active subscription / acquirer doesn't support a portal (e.g. Freemius). Show "no subscription to manage".</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## API Gateway
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>`status`</Table.Th>
+      <Table.Th>When / What to do</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`not_enough_queries` (`QuotaExceededError`)</Table.Td>
+      <Table.Td>402</Table.Td>
+      <Table.Td>`gateway.call()` — user's quota is exhausted. The SDK already refreshes balances before throwing. PaywallUI catches it automatically and opens the upgrade modal; headless callers handle it themselves.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`provider-disabled`</Table.Td>
+      <Table.Td>403</Table.Td>
+      <Table.Td>API Provider is disabled in paywall settings or `tokenization` is not configured. Configuration error.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Visibility and trial
+
+These are **not errors** — the SDK emits dedicated events (`visibility_blocked` / `trial_blocked`) instead of throwing. Don't `try/catch` for them, subscribe instead:
+
+```ts
+paywall.on('visibility_blocked', (v) => { /* country doesn't match */ });
+paywall.on('trial_blocked', (status) => { /* trial still active */ });
+```
+
+Details in [Trial](/docs-v2/sdk-v3/trial) and [PaywallUI](/docs-v2/sdk-v3/ui).
+
+## Low level: backend codes with originals
+
+When the backend returns JSON with a `code` field in the body, the SDK passes it into `PaywallError.code` unchanged:
+
+```jsonc
+// HTTP 400 from the auth backend:
+{ "code": "weak_password", "msg": "Password should be at least 8 characters" }
+// → throw new PaywallError('weak_password', 'Password should be at least 8 characters', { status: 400, cause: <body> })
+```
+
+If there's no `code` in the body — fallback to `http_${status}`:
+
+```jsonc
+// HTTP 503 without a JSON body or without `code`:
+// → throw new PaywallError('http_503', 'Service Unavailable', { status: 503, cause: <body|null> })
+```
+
+`cause` always carries the original response body (parsed JSON object or `null`) — pull out structural fields for context-aware handling:
+
+```ts
+catch (e) {
+  if (e instanceof PaywallError && e.code === 'http_409') {
+    const body = e.cause as { hasActivePurchase?: boolean } | null;
+    if (body?.hasActivePurchase) {
+      // ...special-case handling
+    }
+  }
+}
+```
+
+## Cookbook
+
+### Unified handler
+
+```ts
+function isUserMistake(e: unknown): boolean {
+  if (!(e instanceof PaywallError)) return false;
+  return [
+    'invalid_credentials',
+    'invalid_otp',
+    'invalid_email',
+    'weak_password',
+    'user_already_exists',
+    'email_exists',
+    'oauth_cancelled',
+    'popup_blocked',
+    'aborted',
+    'already_purchased'
+  ].includes(e.code);
+}
+
+function isInfraIssue(e: unknown): boolean {
+  if (!(e instanceof PaywallError)) return false;
+  return e.code === 'network_error' || e.code === 'upstream' || (e.status ?? 0) >= 500;
+}
+
+try {
+  await someAction();
+} catch (e) {
+  if (isUserMistake(e)) showInline(e);
+  else if (isInfraIssue(e)) showToast('Service unavailable, please try later');
+  else reportToSentry(e);
+}
+```
+
+### Retry on network_error
+
+The SDK does not auto-retry. If you need it, wrap on the host side:
+
+```ts
+async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === attempts - 1) throw e;
+      if (!(e instanceof PaywallError) || e.code !== 'network_error') throw e;
+      await new Promise((r) => setTimeout(r, 500 * (i + 1))); // 500ms, 1s
+    }
+  }
+  throw new Error('unreachable');
+}
+
+const session = await withRetry(() => auth.signInWithEmail({ email, password }));
+```
+
+<Callout type="warning">
+  **Don't retry checkout operations.** `createCheckout` is already idempotent via `Idempotency-Key`, but a retry on `network_error` may land in the window where the backend has already created a session with the acquirer — and the user may see duplicates. If you must retry, use the same `idempotencyKey`, not an auto-generated one.
+</Callout>
+
+### Sentry / Datadog logging
+
+```ts
+function reportPaywallError(e: PaywallError, context: Record<string, unknown> = {}) {
+  Sentry.captureException(e, {
+    tags: { paywall_code: e.code, paywall_status: String(e.status ?? '') },
+    extra: { cause: e.cause, ...context }
+  });
+}
+```
+
+`code` is a good grouping tag. `status` is useful for filtering "5xx only".
+
+## Next steps
+
+- [Events](/docs-v2/sdk-v3/events) — events that **don't** throw (`visibility_blocked`, `trial_blocked`, `purchase_failed`).
+- [Security](/docs-v2/sdk-v3/security) — XSS, custom fetch, idempotency.
+- [PaywallUI](/docs-v2/sdk-v3/ui) — state machine + `state.error` for rendering.

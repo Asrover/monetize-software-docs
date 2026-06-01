@@ -1,0 +1,330 @@
+import { Callout, Table, Tabs } from 'nextra/components';
+
+# Components
+
+Declarative wrappers over the hooks. They cover the most common patterns — 80% of integrations skip `useEffect` boilerplate. For the rest, reach for the hooks directly.
+
+## `<PaywallGate>`
+
+Declarative gate: `loading` → `fallback` → `children`. Powered by [`usePaywallAccess`](/docs-v2/sdk-v3/react/hooks#usepaywallaccessopts).
+
+```tsx
+<PaywallGate
+  loading={<Skeleton />}
+  fallback={({ open }) => <button onClick={open}>Upgrade</button>}
+>
+  <PremiumFeature />
+</PaywallGate>
+```
+
+### Props
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Prop</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>What it does</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`children`</Table.Td>
+      <Table.Td>`ReactNode`</Table.Td>
+      <Table.Td>Premium content. Rendered **only** when `access === 'granted'`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`fallback`</Table.Td>
+      <Table.Td>`ReactNode \| ((args: BlockedRenderArgs) => ReactNode)`</Table.Td>
+      <Table.Td>Shown when `access === 'blocked'`. The render function receives `{ result, open }` — `open()` triggers `paywall.open()`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`loading`</Table.Td>
+      <Table.Td>`ReactNode`</Table.Td>
+      <Table.Td>Shown while `getAccess()` hasn't returned (initial fetch / Provider mount). Defaults to `null`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`openOnBlocked`</Table.Td>
+      <Table.Td>`boolean`</Table.Td>
+      <Table.Td>Automatically call `paywall.open()` on blocked. Defaults to `false` — most hosts want an explicit CTA click first.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+```ts
+interface BlockedRenderArgs {
+  result: Extract<PaywallAccessResult, { access: 'blocked' }>;
+  open: () => void;
+}
+```
+
+### Patterns
+
+<Tabs items={['Simple CTA', 'Auto-open', 'Render function', 'Custom logic via the hook']}>
+<Tabs.Tab>
+
+```tsx
+<PaywallGate fallback={<UpgradeCTA />}>
+  <PremiumFeature />
+</PaywallGate>
+```
+
+Static fallback. The button inside `<UpgradeCTA>` calls `usePaywall().open()` itself.
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```tsx
+<PaywallGate openOnBlocked>
+  <PremiumFeature />
+</PaywallGate>
+```
+
+The modal pops up as soon as the user lands on the component. Useful for feature gates — clicking "AI summary" sends them straight to the paywall.
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```tsx
+<PaywallGate
+  loading={<Skeleton />}
+  fallback={({ open, result }) => (
+    <Card>
+      <h3>Pro feature locked</h3>
+      <p>Your trial ended {timeSince(result.trial?.expiresAt)} ago.</p>
+      <button onClick={open}>Continue with Pro</button>
+    </Card>
+  )}
+>
+  <PremiumFeature />
+</PaywallGate>
+```
+
+The render function gives you access to `result` — vary the copy by `reason`.
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```tsx
+function PremiumFeatureGated() {
+  const access = usePaywallAccess();
+  const paywall = usePaywall();
+
+  if (access.status === 'loading') return <Skeleton />;
+
+  if (access.result.access === 'granted') {
+    return <PremiumFeature />;
+  }
+
+  // Custom: show "Try trial" if the user hasn't had a trial yet
+  if (!access.result.user?.had_previous_trial) {
+    return <button onClick={() => paywall?.open()}>Try free</button>;
+  }
+  return <button onClick={() => paywall?.open()}>Upgrade</button>;
+}
+```
+
+Hook directly — for non-standard branches like "different CTA depending on trial history".
+
+</Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+  `<PaywallGate>` covers 80% of gating. For the rest, drop down to [`usePaywallAccess`](/docs-v2/sdk-v3/react/hooks#usepaywallaccessopts) — the component is deliberately not configurable for every edge case.
+</Callout>
+
+## `<PaywallButton>`
+
+Sugar over `usePaywall().open()`. Renders a native `<button>` by default and forwards every HTML attribute.
+
+```tsx
+<PaywallButton className="btn-primary">
+  Upgrade
+</PaywallButton>
+```
+
+### Props
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Prop</Table.Th>
+      <Table.Th>Type</Table.Th>
+      <Table.Th>What it does</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`mode`</Table.Td>
+      <Table.Td>`'paywall' \| 'support' \| 'signin' \| 'signup' \| 'auth'`</Table.Td>
+      <Table.Td>What to open. `'paywall'` (default) → `open()`, `'support'` → `openSupport()`, `'signin'`/`'signup'` → `openSignin/openSignup`. `'auth'` is an alias for `'signin'`. Ignored when `priceId` is set.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`priceId`</Table.Td>
+      <Table.Td>`string`</Table.Td>
+      <Table.Td>Direct checkout: when set, the click calls `paywall.checkout(priceId, opts)` and skips the layout with the plan list — the host has already picked the plan in its own UI. Overrides `mode`. See [direct checkout](#direct-checkout-priceid) below.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`render`</Table.Td>
+      <Table.Td>`(args: { open, ready, processing }) => ReactElement`</Table.Td>
+      <Table.Td>Render-prop for full control over the trigger element. `processing` is true while direct-checkout (`priceId`-mode) is preparing — always false in modal-flow. When set, native `<button>` props are ignored.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity` / `renew` / `skipTrial` / `skipVisibility`</Table.Td>
+      <Table.Td>`OpenOptions`</Table.Td>
+      <Table.Td>Forwarded into `paywall.open(opts)` (or `paywall.checkout(priceId, opts)` when `priceId` is set).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`...rest`</Table.Td>
+      <Table.Td>`ButtonHTMLAttributes<HTMLButtonElement>`</Table.Td>
+      <Table.Td>`className`, `disabled`, `aria-*`, `type`, `onClick` — all forwarded onto the native `<button>`. `onClick` is composed with our open handler.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Custom element via `render`
+
+```tsx
+<PaywallButton render={({ open, ready }) => (
+  <MyFancyButton onClick={open} disabled={!ready}>
+    Upgrade
+  </MyFancyButton>
+)} />
+```
+
+Radix-style `asChild` via render prop. Before Provider mount `ready: false` — the button should be `disabled`, otherwise the click is a no-op (no instance yet).
+
+### Mode variants
+
+```tsx
+<PaywallButton>Upgrade</PaywallButton>                    {/* opens the paywall layout */}
+<PaywallButton mode="support">Need help?</PaywallButton>  {/* openSupport() */}
+<PaywallButton mode="signin">Sign in</PaywallButton>      {/* openSignin() */}
+<PaywallButton mode="signup">Create account</PaywallButton> {/* openSignup() */}
+```
+
+### Renewal flow
+
+```tsx
+<PaywallButton renew>
+  Renew subscription
+</PaywallButton>
+```
+
+The paywall opens, skipping the `has_active_subscription` check — `createCheckout()` is called with `ignoreActivePurchase: true`. Use on the "Renew/Upgrade plan" button in the customer portal.
+
+### Direct checkout (`priceId`)
+
+When you render your own pricing page (cards / table) and want the click to go **straight to the hosted checkout** — skipping the plan-picker step in the modal — pass `priceId`:
+
+```tsx
+import { usePaywallPrices, PaywallButton } from '@monetize.software/sdk-react';
+
+function PricingCards() {
+  const { prices } = usePaywallPrices();
+  return prices?.map((p) => (
+    <Card key={p.id}>
+      <h3>{p.label}</h3>
+      <PaywallButton priceId={p.id} className="btn-primary">
+        Get this plan
+      </PaywallButton>
+    </Card>
+  ));
+}
+```
+
+**The button shows busy state automatically.** While the SDK is preparing the checkout (bootstrap → gates → `createCheckout`) — typically 200–500 ms — the button is `disabled` and exposes `aria-busy="true"`. No modal-flash. Once the hosted-checkout tab opens, the modal mounts directly into the `awaiting_payment` view. Use the `render` prop if you need to draw your own spinner:
+
+```tsx
+<PaywallButton
+  priceId={p.id}
+  render={({ open, ready, processing }) => (
+    <MyFancyButton onClick={open} disabled={!ready || processing}>
+      {processing ? <Spinner /> : 'Get this plan'}
+    </MyFancyButton>
+  )}
+/>
+```
+
+What the modal still does for you, on demand:
+
+- **Auth-gate** when `checkout_mode: 'preauth'` is configured and there's no signed-in user — the signin form appears, and after success the flow auto-resumes into `/start-checkout`.
+- **Popup-blocked fallback** — if `window.open()` returned `null` (lost transient activation after async signin, aggressive mobile blockers), the modal shows an inline "Open checkout" retry under a fresh user gesture.
+- **Awaiting-payment screen** — the modal stays mounted while the user pays in the new tab, with an "I've paid" verify button and "Open checkout again" recovery.
+
+Without a modal at all:
+
+- **Already-paid** — if the user already has an active subscription (detected via cached user, fresh bootstrap, the preauth signin, or a `409 hasActivePurchase` from the backend), the SDK emits `purchase_completed { restored: true }` and stays headless. The host surfaces that however it likes (toast, redirect, badge update via `usePaywallUser`).
+- **Errors** — `error` is emitted (`identity.email` missing, bootstrap failure, `createCheckout` rejection); the modal never appears.
+
+**Offers** (`usePaywallOffer(priceId)`) automatically thread their `offerId` into `/start-checkout` — required for `duration_minutes`-offers whose countdown lives in `clientStorage` (the backend can't validate the timer, so without an explicit `offerId` the discount would not apply on the hosted checkout).
+
+Under the hood this calls [`paywall.checkout(priceId, opts)`](/docs-v2/sdk-v3/ui#checkoutpriceid-opts) — the same `OpenOptions` apply (`identity`, `renew`, `skipTrial`, `skipVisibility`).
+
+<Callout type="info">
+  **`priceId` overrides `mode`.** A button is either a layout-opener or a direct-checkout trigger — combining both makes no sense (the host has already picked the plan), so when `priceId` is set, `mode` is ignored.
+</Callout>
+
+<Callout type="info">
+  **`mode="auth"` is retained as an alias for `'signin'`** for backwards compatibility — prefer `'signin'` in new code. For anonymous sign-in, don't use a button — call `usePaywall().signInAnonymously()` directly (headless, no modal; the host owns the loading state on its own button).
+</Callout>
+
+## `<PaywallSupportButton>`
+
+Shortcut for `<PaywallButton mode="support">`. Useful for UI conventions ("Help" in a page corner).
+
+```tsx
+<PaywallSupportButton>
+  Need help?
+</PaywallSupportButton>
+```
+
+Takes the same HTML attributes as `<PaywallButton>`, minus `mode` (fixed) and `renew`/`skipTrial` (irrelevant for support).
+
+## Composition: feature gate + CTA
+
+A typical shape for a premium page:
+
+```tsx
+function AISummaryPage() {
+  return (
+    <main>
+      <h1>AI Summary</h1>
+
+      <PaywallGate
+        loading={<Skeleton />}
+        fallback={({ open }) => (
+          <section>
+            <p>This feature is included in Pro.</p>
+            <PaywallButton>Start free trial</PaywallButton>
+          </section>
+        )}
+      >
+        <AISummaryWidget />
+      </PaywallGate>
+
+      <footer>
+        <PaywallSupportButton>Help</PaywallSupportButton>
+      </footer>
+    </main>
+  );
+}
+```
+
+`<PaywallGate>` controls access, `<PaywallButton>` opens the modal, `<PaywallSupportButton>` is a separate path to support. No `useEffect` chains, everything declarative.
+
+## SSR
+
+All three components render safely on the server:
+
+- `<PaywallGate>` renders the `loading` prop (or `null`) — `paywall.getAccess()` is not invoked on the server.
+- `<PaywallButton>` renders a native `<button>` with `disabled` until the instance is ready.
+- `<PaywallSupportButton>` — same.
+
+After the Provider mounts on the client, `usePaywallAccess()` fires its first `getAccess()` and the tree re-renders.
+
+## Next steps
+
+- [Hooks](/docs-v2/sdk-v3/react/hooks) — the primitives underneath the components; use them for custom scenarios.
+- [Quickstart Web](/docs-v2/guide/sdk-v3-web) — end-to-end React integration.
+- [Customer portal](/docs-v2/sdk-v3/customer-portal) — list/cancel/renew without `<PaywallGate>`.

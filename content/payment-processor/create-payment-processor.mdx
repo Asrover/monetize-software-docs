@@ -30,7 +30,7 @@ Navigate to the "Payment Processors" section and click the "New Payment Processo
 
 Select one of the supported payment systems:
 
-<Tabs items={["Stripe", "Paddle"]}>
+<Tabs items={["Stripe", "Paddle", "Freemius"]}>
   <Tabs.Tab>
     **Stripe** Popular payment system with wide support for cards and payment
     methods. **Advantages:** - Support for most bank cards - Global coverage -
@@ -42,6 +42,13 @@ Select one of the supported payment systems:
     subscriptions. **Advantages:** - Built-in tax handling - Support for
     multiple currencies - Specialization in digital goods - Global tax
     compliance **Best for:** - Digital products - Software - Online courses
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Freemius** Merchant of Record for software businesses with built-in
+    licensing, taxes and affiliate management. **Advantages:** - Merchant of
+    Record (handles VAT/sales tax) - Built-in license management - Hosted
+    checkout with global payment methods - Affiliate platform out of the box
+    **Best for:** - WordPress plugins/themes - SaaS products - Desktop apps
   </Tabs.Tab>
 </Tabs>
 
@@ -78,7 +85,7 @@ Configure the payment processor operation mode:
 
 ### Step 4: Payment Processor Configuration
 
-<Tabs items={['Stripe', 'Paddle']}>
+<Tabs items={['Stripe', 'Paddle', 'Freemius']}>
   <Tabs.Tab>
     If you chose Stripe, you need to configure API keys:
 
@@ -181,6 +188,64 @@ Configure the payment processor operation mode:
 3. **Install template**: Use the ready-made checkout page template
 
   </Tabs.Tab>
+
+  <Tabs.Tab>
+  If you chose Freemius, you'll need credentials from the Freemius Developer Dashboard:
+
+    <Callout type="info">
+      Sign in at the [Freemius Dashboard](https://dashboard.freemius.com/) and open your product → **Settings → Keys** to find the values below. Test mode uses your **Sandbox** keys; live mode uses **Production** keys.
+    </Callout>
+
+    **Required data for Freemius:**
+
+    <Table>
+      <thead>
+        <Table.Tr>
+          <Table.Th>Field</Table.Th>
+          <Table.Th>Description</Table.Th>
+          <Table.Th>Where to find</Table.Th>
+        </Table.Tr>
+      </thead>
+      <tbody>
+        <Table.Tr>
+          <Table.Td>**Product ID**</Table.Td>
+          <Table.Td>Numeric ID of your Freemius product</Table.Td>
+          <Table.Td>Dashboard → product page URL or Settings → Keys</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>**Public Key**</Table.Td>
+          <Table.Td>Used by the Checkout to identify your product</Table.Td>
+          <Table.Td>Settings → Keys (`pk_...`)</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>**Secret Key**</Table.Td>
+          <Table.Td>Used to verify webhook signatures and to generate sandbox tokens</Table.Td>
+          <Table.Td>Settings → Keys (`sk_...`)</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>**API Token**</Table.Td>
+          <Table.Td>Bearer token for product-scope REST calls (refunds, cancellations)</Table.Td>
+          <Table.Td>Settings → API Token</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>**Plan ID**</Table.Td>
+          <Table.Td>The plan in this product whose monthly / annual / lifetime pricing fronts the connected paywall</Table.Td>
+          <Table.Td>Dashboard → your product → Plans</Table.Td>
+        </Table.Tr>
+      </tbody>
+    </Table>
+
+    <Callout type="warning">
+      **Security:** Never expose the secret key or API token. Both are server-side only.
+    </Callout>
+
+    **One acquirer ↔ one paywall.** Each Freemius acquirer is allowed to be connected to a single paywall at a time (a database trigger enforces this). The acquirer references one Freemius plan, and the prices on the paywall (monthly / annual / lifetime) are routed to the matching billing cycle of that plan automatically. Switching the acquirer to a different paywall later is safe — historical subscriptions keep flowing into their original paywall via the webhook handler.
+
+    **Plans and pricing:** Plan/pricing creation is gated behind Freemius developer-scope canonical signing (not exposed via Bearer Token). Create plans in the Freemius dashboard manually and configure their monthly / annual / lifetime prices to match the prices you set on your paywall.
+
+    **Webhook setup:** Freemius does not expose webhook listener management in the public API either. After creating the payment processor, set the webhook up manually in **Dashboard → your product → Webhooks → Listeners → Add Webhook** with the URL shown in the form and subscribe to: `subscription.created`, `subscription.cancelled`, `subscription.renewal.failed`, `subscription.renewal.failed.last`, `install.trial.started`, `license.expired`, `payment.created`, `payment.refund`.
+
+  </Tabs.Tab>
 </Tabs>
 
 ### Step 5: Save
@@ -205,6 +270,14 @@ After filling in all fields:
     Make sure that: - API Key is created with "Never Expires" and full
     permissions - Vendor ID contains only numbers - You're using the correct
     environment (sandbox/production)
+  </Accordion.Item>
+
+  <Accordion.Item title="Freemius key validation error">
+    Make sure that: - Product ID is numeric and matches the product in your
+    Freemius dashboard - API Token is generated under Settings → API Token for
+    the same product - Public/Secret keys correspond to the selected mode
+    (Sandbox keys for test, Production keys for live) - The API Token has not
+    been revoked
   </Accordion.Item>
 </Accordion>
 

@@ -1,0 +1,140 @@
+import { Callout, Tabs, Cards } from 'nextra/components';
+
+# Anonymous sign-in
+
+`AuthClient.signInAnonymously()` creates a user without an email — for trial access without a sign-up form. The backend issues a regular `AuthSession`, and `BillingClient` treats it the same as an email user. Concept and dashboard toggle are described in [Paywall → Anonymous sign-in](/docs-v2/paywall/anonymous-sign-in); the v2 equivalent is in [SDK v2 → Anonymous sign-in](/docs-v2/sdk-v2/client-side/anonymous-sign-in).
+
+<Callout type="info">
+  Available only when `allow_anonymous` is enabled in paywall settings. Otherwise the method fails with `PaywallError(code='anonymous_disabled')`.
+</Callout>
+
+## Signature
+
+```ts
+auth.signInAnonymously(input?: {
+  userMeta?: Record<string, string>;
+  /**
+   * Force a brand-new anonymous user — skips the "resume previous anon"
+   * shortcut. See "Forcing a new anonymous user" below.
+   */
+  forceNewAnon?: boolean;
+}): Promise<AuthSession>;
+```
+
+Returns an `AuthSession`. `user.is_anonymous === true`, `user.email === null`.
+
+## Basic flow
+
+```ts
+import { AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  storage: yourStorageAdapter
+});
+
+const session = await auth.signInAnonymously();
+console.log(session.user.id, session.user.is_anonymous); // "usr_abc...", true
+```
+
+The same `auth` can then be passed to `BillingClient` — the anonymous user receives a balances list and can spend trial tokens through `ApiGatewayClient` exactly like a signed-in user.
+
+## Default behaviour: resume
+
+The method is **idempotent** and **preserves the same user.id** across sessions:
+
+1. If already signed in anonymously (`session.user.is_anonymous === true`) → no-op, return the current session. The UI can call this in a render loop with no consequences.
+2. If `anonRefreshToken` from a previous anon-signin is still in storage → call `/auth/refresh` with it. The user comes back to **the same account** with the same balances.
+3. Otherwise → create a new anon user.
+
+This means: if a user signed in anonymously, spent part of their trial balance, signed out (via `signOut()` without `forgetAnonymous`), the next `signInAnonymously()` returns the same account with the remaining balance. Don't reimplement this in your app — the SDK already handles it.
+
+<Callout type="warning">
+  Parallel `signInAnonymously()` calls collapse into one request. Two clicks on "Continue as guest" create **one** anonymous user, not two — but if your button already has a debounce, keep it: cheaper than relying on the dedupe alone.
+</Callout>
+
+## Forcing a new anonymous user
+
+By default the SDK is sticky: subsequent `signInAnonymously()` calls return the same anon user (steps 1–2 above). To bypass that and always mint a fresh anon user, pass `forceNewAnon: true`.
+
+```ts
+// Switch account: drop the current one, create a fresh anon user
+await auth.signOut({ forgetAnonymous: true });
+const fresh = await auth.signInAnonymously({ forceNewAnon: true });
+```
+
+Used in "Switch account" UIs — when the user wants to start over.
+
+## Upgrade to an email user
+
+An anonymous user can "complete" their account with an email and password. Balances and trial quotas are **preserved** — `user.id` doesn't change.
+
+```ts
+const result = await auth.upgradeAnonymousToEmail({
+  email: 'user@example.com',
+  password: 'secret123',
+  idempotencyKey: crypto.randomUUID() // double-click protection
+});
+
+if (result.kind === 'updated') {
+  // Platform email-confirm OFF: session updated immediately,
+  // user.email filled, is_anonymous=false
+} else {
+  // result.kind === 'confirmation_required'
+  // Platform email-confirm ON: wait for the user to click the email link.
+  // The current session STAYS anonymous until confirmation,
+  // password is applied immediately — they can sign in with it later.
+}
+```
+
+<Callout type="warning">
+  Pass `idempotencyKey` — the upgrade endpoint isn't idempotent on the backend, and a double-submit can send two confirmation emails. The SDK does not dedupe upgrade calls.
+</Callout>
+
+## Logout: forget or resume?
+
+```ts
+// 1) Soft signOut — the anon refresh token stays in storage,
+//    the next signInAnonymously() resumes the SAME account.
+await auth.signOut();
+
+// 2) Hard signOut — the anon token is forgotten, the next signin
+//    creates a NEW user with empty balances.
+await auth.signOut({ forgetAnonymous: true });
+```
+
+Scenarios:
+- User closed the tab and came back tomorrow — soft signOut auto-restores the trial balance on reopen.
+- User explicitly clicks "Reset account" — hard signOut.
+- You're testing the trial flow on your machine — hard signOut.
+
+## Reacting in UI
+
+```ts
+const unsubscribe = auth.onAuthChange((event, session) => {
+  // `USER_UPDATED` arrives after upgradeAnonymousToEmail (same user.id,
+  // but is_anonymous=false and email filled) — no need to handle separately,
+  // the conditions below switch UI from banner to profile.
+  if (!session) {
+    showLoggedOut();
+    return;
+  }
+  if (session.user.is_anonymous) {
+    showAnonymousBanner(); // "Save your account?" CTA
+  } else {
+    showProfile(session.user.email);
+  }
+});
+```
+
+`is_anonymous` is the main signal for UI: "should I prompt to upgrade?". After `upgradeAnonymousToEmail()` (`kind: 'updated'`) the flag flips to `false` locally; for `confirmation_required` — after user confirmation and the next `/auth/refresh`.
+
+## See also
+
+<Cards>
+  <Cards.Card title="Concept and dashboard toggle" href="/docs-v2/paywall/anonymous-sign-in" />
+  <Cards.Card title="Session management" href="/docs-v2/sdk-v3/auth/session" />
+  <Cards.Card title="Email & password upgrade" href="/docs-v2/sdk-v3/auth/email-password" />
+  <Cards.Card title="SDK v2 equivalent" href="/docs-v2/sdk-v2/client-side/anonymous-sign-in" />
+</Cards>

@@ -1,0 +1,151 @@
+import { Callout, Tabs, Cards } from 'nextra/components';
+
+# Trial
+
+The concept and dashboard configuration of trials are covered in [Paywall → Trial](/docs-v2/paywall/trial). This page describes what SDK 3.0 does when a trial is active. The v2 equivalent (`localStorage` + `visibility_reason`) is in [SDK v2 → Trial](/docs-v2/sdk-v2/client-side/trial).
+
+<Callout type="info">
+  **Regular paywalls.** For tokenized paywalls a trial becomes trial tokens on the balance — see [Tokenization](/docs-v2/paywall/tokenization) and [API Gateway](/docs-v2/sdk-v3/api-gateway).
+</Callout>
+
+## What happens on `paywall.open()`
+
+`PaywallUI` checks the trial status itself before showing the modal:
+
+1. If **the trial is active** (time hasn't elapsed or the counter hasn't been exhausted) → the modal **does not open**; instead the SDK emits a `trial_blocked` event with the `TrialStatus`. The paywall is "transparent" — the user gets through to the feature.
+2. If **the trial has expired** → the modal opens normally. Right before that the SDK emits `trial_expired` exactly once, so the UI can show a "free trial is over" toast.
+
+So you call `paywall.open()` on every paid action — the SDK decides whether to show the modal or not.
+
+## Listening to trial events
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+
+paywall.on('trial_blocked', (status) => {
+  // status — TrialStatus with remaining time / actions info.
+  // The modal DID NOT open; your app lets the user into the feature.
+  showTrialBanner(status);
+});
+
+paywall.on('trial_expired', () => {
+  // Fires once at expiry. After that, paywall.open() shows the modal normally.
+  trackEvent('trial_expired');
+});
+```
+
+Full event list and `TrialStatus` shape — in [Events → TrialStatus](/docs-v2/sdk-v3/events#trialstatus).
+
+## Sync access: `paywall.getTrialStatus()`
+
+`paywall.getTrialStatus()` returns the last known `TrialStatus | null` without hitting the network — useful for your own UI ("3 free actions left", "trial expires in 2h"). `null` means: `paywall.open()` / `paywall.getAccess()` has never been called yet, or the trial is disabled in the paywall config.
+
+```ts
+const trial = paywall.getTrialStatus();
+if (trial?.mode === 'time' && trial.blocked) {
+  banner.textContent = `${Math.ceil(trial.remainingMs / 60_000)} min of trial left`;
+}
+```
+
+To listen for updates — subscribe to `trial_blocked` (it carries the current status) or to `userChange` (when you only want to react to "trial → subscription").
+
+## Side-effect-free check: `paywall.getAccess()`
+
+When you need to decide "can the user use this feature" **without opening the modal** (for a UI gate, not a CTA), use `getAccess()`:
+
+```ts
+const access = await paywall.getAccess({});
+if (access.granted) {
+  runFeature();
+} else {
+  showUpgradeBanner(access.reason);
+}
+```
+
+`getAccess()` returns a discriminated union `granted | blocked`. An active trial is returned as `granted` — the single-paywall model says: if the SDK *could* open a modal but a trial blocks it, access is considered granted. That way the UI doesn't burn quota or pop a paywall needlessly.
+
+<Callout type="info">
+  **Use the right method for the situation.** `getAccess()` is for feature gates ("can the user run this action?") — it never opens the modal. `paywall.open()` is for the explicit "Buy / Upgrade" CTA — it shows the modal, unless a trial intercepts it.
+</Callout>
+
+## Skipping the trial check
+
+There are two situations where you want to bypass the trial and show the modal immediately:
+
+```ts
+// 1. "Upgrade now" CTA inside a trial banner — the user chose to buy earlier.
+paywall.open({ skipTrial: true });
+
+// 2. Programmatic check without trial leniency (e.g. debugging).
+const access = await paywall.getAccess({ skipTrial: true });
+```
+
+`skipTrial: true` bypasses the trial window check, but **other visibility checks** (targeting, geo, A/B) still apply — the modal won't open if it was hidden for another reason.
+
+## Reset trial: `paywall.resetTrial()`
+
+Clears the trial counter in storage. Useful for dev mode or admin "replay scenario" buttons. Production hosts rarely call this.
+
+```ts
+await paywall.resetTrial();
+// The trial_expired flag resets as well; the next open() restarts the trial from zero.
+```
+
+## Trial banner with a countdown
+
+```ts
+paywall.on('trial_blocked', (status) => {
+  const banner = document.getElementById('trial-banner')!;
+  banner.hidden = false;
+
+  // Discriminate by status.mode — TS narrows the shape.
+  if (status.mode === 'time') {
+    const tick = () => {
+      const left = (status.expiresAt ?? 0) - Date.now();
+      if (left <= 0) {
+        clearInterval(timer);
+        banner.hidden = true;
+        return;
+      }
+      banner.textContent = `${Math.ceil(left / 60000)} min left`;
+    };
+    const timer = setInterval(tick, 1000);
+    tick();
+  } else if (status.mode === 'opens') {
+    banner.textContent = `${status.remainingActions} free actions left`;
+  }
+});
+
+paywall.on('trial_expired', () => {
+  document.getElementById('trial-banner')!.hidden = true;
+});
+```
+
+Exact shapes for `TimeTrialStatus` / `OpensTrialStatus` (`startedAt`, `expiresAt`, `remainingMs`, `totalMs` for `time`; `remainingActions`, `totalActions` for `opens`) — in [Events → TrialStatus](/docs-v2/sdk-v3/events#trialstatus).
+
+## Comparison with v2
+
+| | SDK v2 | SDK v3 |
+|---|---|---|
+| Storage | `localStorage` / `chrome.storage` | `localStorage` / `chrome.storage` (via `StorageAdapter`) |
+| Activation | unconditional `paywall.open()` → throws if expired | `paywall.open()` → emits `trial_blocked` if active, opens modal if expired |
+| Read state | `error.visibility_reason` after a failed `open()` | `paywall.getTrialStatus()` (sync) or `paywall.getAccess()` (full gate) |
+| Skip trial | no built-in flag | `{ skipTrial: true }` in `open()` / `getAccess()` |
+| Expired signal | `error.visibility_reason === 'trial-time' \| 'trial-actions'` | event `trial_expired` |
+
+Behaviour is identical (trial logic on the backend + locally stored counter), API is cleaner.
+
+## See also
+
+<Cards>
+  <Cards.Card title="Concept and dashboard config" href="/docs-v2/paywall/trial" />
+  <Cards.Card title="PaywallUI" href="/docs-v2/sdk-v3/ui" />
+  <Cards.Card title="Events" href="/docs-v2/sdk-v3/events" />
+  <Cards.Card title="SDK v2 equivalent" href="/docs-v2/sdk-v2/client-side/trial" />
+</Cards>

@@ -1,0 +1,363 @@
+import { Callout, Table } from 'nextra/components';
+
+# PaywallUI
+
+`PaywallUI` is the UI wrapper around `BillingClient` / `AuthClient`. It opens a Shadow DOM modal, handles the auth-gate and checkout flow, emits typed events and exposes a public state machine for the host.
+
+## Opening
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+const paywall = new PaywallUI({ paywallId: 'pw_123', auth: true });
+
+document.getElementById('upgrade').onclick = () => paywall.open();
+document.getElementById('login').onclick = () => paywall.openSignin();
+document.getElementById('register').onclick = () => paywall.openSignup();
+document.getElementById('help').onclick = () => paywall.openSupport();
+```
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Method</Table.Th>
+      <Table.Th>What it does</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`open(opts?)`</Table.Td>
+      <Table.Td>Opens the modal with the layout (prices + auth_panel/current_session per paywall config). `opts: OpenOptions` — `identity`, `skipTrial`, `skipVisibility`, `renew`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`openAuth(opts?)`</Table.Td>
+      <Table.Td>Opens only the auth-gate (signin form). Alias for `openSignin()` — kept for backwards compatibility.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`openSignin(opts?)`</Table.Td>
+      <Table.Td>Opens the auth-gate on the signin form. Equivalent to `openAuth()`, just a more explicit name.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`openSignup(opts?)`</Table.Td>
+      <Table.Td>Opens the auth-gate in signup mode (email/password/repeat). If the admin disabled `allow_signup` in the layout — falls back to signin.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`signInAnonymously()`</Table.Td>
+      <Table.Td>Headless `signInAnonymously` without opening the modal. Returns `Promise<AuthSession>`. Idempotent (already anonymous → instant return) → resumes the same `user_id` via `anonRefreshToken` in storage → fresh `/auth/anonymous/signin`. After `signOut()` (without `forgetAnonymous`) a repeat call returns the **same anonymous user** — balance/trial preserved. Parallel calls deduplicate.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`openSupport(opts?)`</Table.Td>
+      <Table.Td>Opens only the support form. Back closes.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`checkout(priceId, opts?)`</Table.Td>
+      <Table.Td>Direct checkout for a specific price — skips the plan-picker layout and goes straight to `/start-checkout`. Reuses the preauth-gate, popup-blocked and awaiting-payment screens. Already-paid is a headless reject: emits `purchase_completed { restored: true }` without showing the "Subscription restored" view. See [direct checkout](#checkoutpriceid-opts) below.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`close()`</Table.Td>
+      <Table.Td>Closes the modal. Emits `close`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`preload({signal?})`</Table.Td>
+      <Table.Td>Warms up bootstrap + balances in the background. Best-effort — never throws.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`destroy()`</Table.Td>
+      <Table.Td>Full teardown: unmounts the modal, clears listeners, releases managed-auth.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getAccess(opts?)`</Table.Td>
+      <Table.Td>Side-effect-free check "should I gate this feature?". Returns discriminated `granted` / `blocked`. See [Trial → getAccess](/docs-v2/sdk-v3/trial#side-effect-free-check-paywallgetaccess).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getState()` / `onStateChange(cb, opts?)`</Table.Td>
+      <Table.Td>State machine snapshot + subscription. See below.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getTrialStatus()`</Table.Td>
+      <Table.Td>Last known `TrialStatus | null` (sync, no network). `null` — `open()` / `getAccess()` not called yet, or trial disabled.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getVisibility()`</Table.Td>
+      <Table.Td>Last server-computed `VisibilityStatus | null` (sync). Useful for rendering a "service unavailable in your country" fallback without opening the modal.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`resetTrial()`</Table.Td>
+      <Table.Td>Clears trial state in storage. For dev mode / admin "replay scenario" buttons. In production hosts rarely call this.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getPrices(opts?)` / `getCachedPrices()`</Table.Td>
+      <Table.Td>Shortcuts over `billing.getPrices()` for rendering pricing cards outside the modal. See [BillingClient → getPrices](/docs-v2/sdk-v3/bootstrap#getpricesopts--getcachedprices).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getUserLanguage()`</Table.Td>
+      <Table.Td>Snapshot of the user's resolved language for syncing your i18n with what the paywall shows. See [Locale & language](/docs-v2/sdk-v3/locale).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`checkReturn()`</Table.Td>
+      <Table.Td>Scans the current URL for `?paywall_status=paid|failed|cancelled` markers and emits `purchase_completed` / `purchase_failed`. The constructor runs this in a microtask when `autoDetectReturn: true` (default).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`on(event, cb)` / `off(event, cb)`</Table.Td>
+      <Table.Td>Typed event subscription. See [Events](/docs-v2/sdk-v3/events).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`onUserChange(cb)`</Table.Td>
+      <Table.Td>Shortcut for `paywall.on('userChange', cb)` — the most common subscription.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## `checkout(priceId, opts?)`
+
+Direct checkout: get a hosted checkout URL for a specific price and open it in a new tab, **without** showing the plan list. Useful when the host renders its own pricing cards / table and the click on "Buy" should land in Stripe / Paddle / Chargebee / Freemius / Overpay directly.
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+const paywall = new PaywallUI({ paywallId: 'pw_123', auth: true });
+
+document.querySelectorAll<HTMLButtonElement>('[data-price-id]').forEach((el) => {
+  el.addEventListener('click', () => {
+    paywall.checkout(el.dataset.priceId!);
+  });
+});
+
+paywall.on('purchase_completed', (p) => {
+  if (p.restored) showToast('You already have an active subscription.');
+  else unlockPremium();
+});
+```
+
+### Late-mount UX
+
+Unlike `open()`, **no modal appears while the SDK is preparing** the checkout. Bootstrap, visibility / trial gates, the active-subscription pre-check and `createCheckout` all run headless — there's no loading-flash modal in front of the user. The host's button is the only "I'm working" surface during these 200–500 ms.
+
+Subscribe to [`state.processing`](#state-machine) (or use `<PaywallButton priceId>` in [React](/docs-v2/sdk-v3/react/components#paywallbutton)) and show a spinner directly on your CTA:
+
+```ts
+paywall.onStateChange((state) => {
+  myButton.disabled = state.processing;
+  myButton.classList.toggle('busy', state.processing);
+});
+```
+
+The modal is mounted **only when actual UI is needed**:
+
+- `checkout_mode: 'preauth'` + managed-auth + no real session → auth-gate (signin form). After success the modal auto-resumes into `createCheckout()` with the same `priceId`.
+- Popup blocked by the browser (lost transient activation after async signin, aggressive mobile blockers) → `popup_blocked` view with a retry button under a fresh user gesture.
+- Popup opened successfully → `awaiting_payment` view with "I've paid" verify, "Open checkout again" and "Tab closed? Try again".
+
+### Headless-reject paths (no modal)
+
+- **Already-paid.** When the user already has an active subscription — detected via cached user, fresh bootstrap, the preauth signin, or a `409 hasActivePurchase` from the backend — the SDK emits `purchase_completed { restored: true }` and **does not show** a "Subscription restored" view. The host surfaces it however it likes (toast, redirect, badge update via `userChange`).
+- **Gate blocked.** `visibility_blocked` / `trial_blocked` fire just like in `open()`. No modal.
+- **Errors.** `error` fires (`identity.email` missing, bootstrap failure, `createCheckout` rejection). No modal.
+
+The plan-picker layout **never appears in direct-checkout flow**, not even as an error fallback — the host already owns plan selection.
+
+### Offers applied automatically
+
+`checkout(priceId)` resolves the active offer for the price through `getOfferForPrice(priceId)` and threads its `offerId` into `/start-checkout`. This is required for **duration-offers** (countdown stored in `clientStorage` — the backend can't validate the timer, so without an explicit `offerId` the discount would silently not apply on the hosted checkout, even though the UI showed it). End-date offers go through too; the backend re-verifies applicability against country/email/mode.
+
+### Requirements
+
+- **`identity.email` must be set** before the call — via `paywall.checkout(priceId, { identity })`, an earlier `paywall.open({ identity })`, `setIdentity()`, or managed-auth. Without an email the backend rejects `/start-checkout` with `400`; the SDK emits `error`.
+- In `checkout_mode: 'preauth'` without managed-auth, the host is responsible for collecting the email before the call — the SDK has nowhere to show a signin form.
+
+### Fully headless (no modal at all)
+
+If the host wants only the checkout URL (e.g. renders a custom in-page "awaiting payment" screen instead of the SDK's), bypass the modal entirely:
+
+```ts
+import { findApplicableOffer } from '@monetize.software/sdk';
+
+const offer = findApplicableOffer(paywall.billing.getCachedOffers(), '42');
+const result = await paywall.billing.createCheckout({
+  priceId: '42',
+  offerId: offer?.id  // required for duration-offers
+});
+window.open(result.url, '_blank');
+```
+
+In that path the host owns auth-gate UX, popup-blocked retry, the awaiting-payment screen, and `purchase_completed` wiring (via `paywall.on('purchase_completed', …)` or `checkReturn()` on the success page). For most apps `paywall.checkout()` is the better trade-off — same control over the storefront, fewer screens to build.
+
+## State machine
+
+`PaywallUI` keeps a public snapshot of the modal's state. Useful for:
+
+- **`useSyncExternalStore` in React** — single source of truth instead of stitching a dozen `on()` listeners;
+- **Funnel analytics** — track every transition (closed → loading → ready → ...);
+- **Conditional UI** — the host renders its own Upgrade button based on `state.view`.
+
+```ts
+type PaywallStateSnapshot = {
+  open: boolean;          // modal is visible
+  view:                   // what's shown (null when closed)
+    | 'loading'
+    | 'error'
+    | 'layout'
+    | 'auth'
+    | 'support'
+    | 'awaiting_payment'  // checkout opened in a new tab
+    | 'popup_blocked'     // browser blocked the popup
+    | 'purchased'         // success view with Continue
+    | null;
+  error: PaywallError | null;
+  /** Direct-checkout (`paywall.checkout(priceId)`) is doing background work —
+   *  bootstrap + visibility/trial gates + createCheckout — before any UI is
+   *  needed. Host's CTA button should show busy/disabled while true so the
+   *  user gets feedback without a modal-flash. Always false during the
+   *  `paywall.open()` flow (the modal mounts immediately with its own
+   *  LoadingView). */
+  processing: boolean;
+};
+```
+
+### Using with React
+
+```tsx
+import { useSyncExternalStore } from 'react';
+import { paywall } from './paywall'; // singleton PaywallUI
+
+function PaywallStatus() {
+  const state = useSyncExternalStore(
+    (cb) => paywall.onStateChange(cb, { immediate: 'none' }),
+    () => paywall.getState(),
+    () => paywall.getState() // SSR fallback (closed state)
+  );
+
+  if (state.view === 'loading') return <Spinner />;
+  if (state.view === 'error') return <ErrorBox err={state.error!} />;
+  if (state.view === 'awaiting_payment') return <p>Paying in new tab…</p>;
+  return null;
+}
+```
+
+`useSyncExternalStore` calls `getState()` itself after `subscribe` — no initial snapshot needed via the listener, hence `immediate: 'none'`.
+
+### Manual usage (Vue / Svelte / vanilla)
+
+```ts
+const off = paywall.onStateChange(
+  (state) => {
+    if (state.view === 'purchased') confetti();
+    if (state.view === 'error') showToast(state.error!.message);
+  },
+  { immediate: 'sync' } // get current snapshot synchronously
+);
+// off() to unsubscribe
+```
+
+### The `immediate` option
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Value</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`'microtask'` (default)</Table.Td>
+      <Table.Td>Initial snapshot via `queueMicrotask`. Safe for most integrations — the host gets to reset state in the same tick.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'sync'`</Table.Td>
+      <Table.Td>Initial snapshot right now. Handy for Vue/Svelte/vanilla when you need an immediate read.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'none'`</Table.Td>
+      <Table.Td>Skip initial — only real changes. For `useSyncExternalStore` (it reads the snapshot itself).</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  Snapshot objects are stable: while state hasn't changed, repeated `getState()` returns the same `===`-equal object. Important for `useSyncExternalStore` — otherwise React would re-render on every tick.
+</Callout>
+
+## Events vs state
+
+Both events and state expose what's happening — the choice depends on the task.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Scenario</Table.Th>
+      <Table.Th>Event</Table.Th>
+      <Table.Th>State</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>"User successfully purchased" (one-shot side-effect: confetti, redirect, slack ping)</Table.Td>
+      <Table.Td>✅ `purchase_completed`</Table.Td>
+      <Table.Td>`state.view='purchased'` is sticky — on re-open you may retrigger</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>"Is the modal open right now?"</Table.Td>
+      <Table.Td>Have to stitch `open`+`close`</Table.Td>
+      <Table.Td>✅ `state.open`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>React component rendering a loader</Table.Td>
+      <Table.Td>Hard (multiple events, race)</Table.Td>
+      <Table.Td>✅ `useSyncExternalStore`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Conversion funnel analytics</Table.Td>
+      <Table.Td>✅ Clean stream: open → ready → price_selected → checkout_started → purchase_completed</Table.Td>
+      <Table.Td>State is coarser — not every event maps to a transition</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+Rule of thumb: **events for side-effects, state for rendering**.
+
+## Constructor options (`PaywallUIOptions`)
+
+```ts
+interface PaywallUIOptions extends Omit<BillingClientOptions, 'auth'> {
+  paywallId: string;
+  apiOrigin: string;
+  identity?: Identity;
+  storage?: StorageAdapter;
+  capabilities?: string[];
+  fetch?: typeof fetch;
+  apiKey?: string;
+  client?: BillingClient;
+  host?: HTMLElement;
+  /** Wire managed-auth. true (creates AuthClient), AuthClient (use existing),
+   *  or Partial<AuthClientOptions> (custom options). */
+  auth?: true | AuthClient | Partial<AuthClientOptions>;
+  /** Auto-scan URL for ?paywall_status= markers on construction. Default: true. */
+  autoDetectReturn?: boolean;
+  /** Shadow DOM mode. Default 'closed' (full isolation). 'open' — for Playwright
+   *  e2e and live admin preview. */
+  shadowMode?: 'open' | 'closed';
+  /** Analytics. false to disable, object for custom batch settings or endpoint. */
+  analytics?: boolean | AnalyticsOptions;
+  /** When bootstrap isn't cached: render the modal **immediately** with a
+   *  spinner and run gates after data arrives (`true`, default), or **wait**
+   *  for bootstrap before mounting (`false`). */
+  mountThenLoad?: boolean;
+}
+```
+
+Auth resolution:
+
+- `auth: true` — SDK creates a new `AuthClient` with the same `paywallId/apiOrigin/storage` as BillingClient.
+- `auth: AuthClient` — host supplies an existing instance (useful for multi-paywall apps or pre-construction signin).
+- `auth: Partial<AuthClientOptions>` — `paywallId` is filled in, the rest comes from your overrides.
+- Omitted — hybrid mode: identity is passed via `opts.identity` or `paywall.open({ identity })`.
+
+## Lifecycle hooks for hosts
+
+```ts
+// On host unmount (SPA route change, hot reload, tests):
+paywall.destroy();
+```
+
+`destroy()` is idempotent and safe to call multiple times. It unmounts the Shadow DOM modal, removes every event listener, releases the managed `AuthClient` (only if `auth: true` was used — externally provided `AuthClient` lifecycle stays with the host), and stops the analytics flush timer.

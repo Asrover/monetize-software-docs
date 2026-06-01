@@ -1,0 +1,234 @@
+import { Callout, Cards, Tabs, Table } from 'nextra/components';
+
+# React bindings — `@monetize.software/sdk-react`
+
+Provider, hooks and declarative components on top of `@monetize.software/sdk`. ≤ 2 KB gzip (bindings only — the UI lives inside the SDK).
+
+Works in **both** browser scenarios:
+
+- **[Drop-in PaywallUI](/docs-v2/sdk-v3/browser-paywall-ui)** — use `<PaywallButton>` / `<PaywallGate>` to open the modal declaratively, plus hooks (`usePaywallUser`, `usePaywallTrial`) to read state in your components.
+- **[Custom UI](/docs-v2/sdk-v3/browser-custom-ui)** — skip `<PaywallButton>` / `<PaywallGate>`, use hooks only (`usePaywallPrices`, `usePaywallAccess`, `usePaywallUser`) to power your own pricing cards, feature gates, and dashboards.
+
+```bash
+pnpm add @monetize.software/sdk-react @monetize.software/sdk react
+```
+
+Requires `react: >= 18` (uses `useSyncExternalStore` for concurrent-safe snapshots).
+
+<Callout type="info">
+**Working reference app:**
+[github.com/monetize-software/sdk-examples/tree/main/nextjs](https://github.com/monetize-software/sdk-examples/tree/main/nextjs)
+— Next.js 16 + App Router + Tailwind. Every hook and component shown
+below is wired into a runnable page; clone, set two env vars, `npm install`,
+`npm run dev`.
+</Callout>
+
+## Quick start
+
+```tsx
+import {
+  PaywallProvider,
+  PaywallGate,
+  PaywallButton,
+  usePaywallUser
+} from '@monetize.software/sdk-react';
+
+function App() {
+  return (
+    <PaywallProvider
+      options={{
+        paywallId: 'YOUR_ID',
+        apiOrigin: 'https://pay.your-domain.com',
+        auth: true
+      }}
+    >
+      <PaywallGate fallback={<UpgradeCTA />}>
+        <PremiumFeature />
+      </PaywallGate>
+
+      <PaywallButton>Upgrade</PaywallButton>
+    </PaywallProvider>
+  );
+}
+
+function UpgradeCTA() {
+  const account = usePaywallUser();
+  if (account.status === 'loading') return <p>…</p>;
+  if (account.status === 'guest') return <p>Hi guest! Unlock full access.</p>;
+  return <p>Hi, {account.user?.email ?? 'there'}! Unlock full access.</p>;
+}
+```
+
+`apiOrigin` must match the `custom_domain` configured for your paywall on the platform.
+
+## `<PaywallProvider>`
+
+Accepts one of two mutually exclusive props (TypeScript discriminated union):
+
+<Tabs items={['options — Provider creates the instance', 'instance — external instance']}>
+<Tabs.Tab>
+
+```tsx
+<PaywallProvider
+  options={{
+    paywallId: '3',
+    apiOrigin: 'https://pay.your-domain.com',
+    auth: true
+  }}
+>
+  <App />
+</PaywallProvider>
+```
+
+The instance is built inside `useEffect` (client-only); on the server the context value is `null`. Every hook does a graceful fallback (`null` / `{ status: 'loading' }`), so the Provider is safe to render in Next.js without `'use client'` shenanigans on the subtree.
+
+The cleanup effect calls `paywall.destroy()` — StrictMode double-mount won't leak.
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```tsx
+import { createPaywallUI } from '@monetize.software/sdk-extension';
+const paywall = createPaywallUI({ paywallId, apiOrigin });
+
+<PaywallProvider instance={paywall}>
+  <App />
+</PaywallProvider>
+```
+
+Needed for:
+
+- Chrome extensions — `@monetize.software/sdk-extension` ships a structurally compatible `PaywallUI` (with a `RemoteBillingClient` under the hood).
+- A shared singleton across several React trees.
+- Tests — pass in mocks or a Vitest instance.
+
+In `instance` mode the lifecycle belongs to the host — the Provider does not call `destroy()`.
+
+</Tabs.Tab>
+</Tabs>
+
+<Callout type="warning">
+  **`options` is not reactive.** The Provider creates the instance once; switching `paywallId` between renders won't rebuild `PaywallUI`. Force it via `key`:
+
+  ```tsx
+  <PaywallProvider key={paywallId} options={{ paywallId, apiOrigin }}>
+  ```
+
+  Reactive option swaps are intentionally not supported — use `key` to force a fresh instance.
+</Callout>
+
+## What's available
+
+<Cards>
+  <Cards.Card title="Hooks" href="/docs-v2/sdk-v3/react/hooks" description="usePaywall, usePaywallUser, usePaywallAccess, usePaywallState, usePaywallPrices, usePaywallTrial, usePaywallVisibility, usePaywallEvent" />
+  <Cards.Card title="Components" href="/docs-v2/sdk-v3/react/components" description="PaywallGate, PaywallButton, PaywallSupportButton" />
+</Cards>
+
+## SSR / Next.js App Router
+
+`@monetize.software/sdk-react` ships a `'use client'` directive on its entrypoint — the bundler crosses the client boundary itself, so the host can import `PaywallProvider` / hooks directly in a server component without wrapping.
+
+```tsx
+// app/providers.tsx
+'use client';
+
+import { PaywallProvider } from '@monetize.software/sdk-react';
+
+export function PaywallProviders({ children }) {
+  return (
+    <PaywallProvider
+      options={{
+        paywallId: process.env.NEXT_PUBLIC_PAYWALL_ID!,
+        apiOrigin: process.env.NEXT_PUBLIC_PAYWALL_ORIGIN!,
+        auth: true
+      }}
+    >
+      {children}
+    </PaywallProvider>
+  );
+}
+
+// app/layout.tsx
+import { PaywallProviders } from './providers';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <PaywallProviders>{children}</PaywallProviders>
+      </body>
+    </html>
+  );
+}
+```
+
+Hooks called from server components return the SSR snapshot (`null` / loading). On the client, real data flows in after mount.
+
+## Which SDK channel does it work with?
+
+`@monetize.software/sdk-react` is drop-in for **any** structurally compatible `PaywallUI`:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Scenario</Table.Th>
+      <Table.Th>Source of `PaywallUI`</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Web / SPA</Table.Td>
+      <Table.Td>Provider `options` → internally `new PaywallUI()` from `@monetize.software/sdk`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Chrome Extension (React popup)</Table.Td>
+      <Table.Td>`createPaywallUI()` from `@monetize.software/sdk-extension` (Remote-proxied) → Provider `instance`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Tests (vitest + RTL)</Table.Td>
+      <Table.Td>Mocks or a real `PaywallUI` → Provider `instance`.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Re-exported types
+
+For ergonomics, core SDK types are re-exported — the host doesn't need a second import from `@monetize.software/sdk`:
+
+```ts
+import type {
+  PaywallUI,
+  PaywallUIOptions,
+  PaywallEvent,
+  PaywallEventHandler,
+  PaywallStateSnapshot,
+  PaywallAccessResult,
+  GetAccessOptions,
+  OpenOptions,
+  AnalyticsOptions,
+  PaywallUser,
+  PaywallPrice,
+  PaywallBootstrap,
+  PaywallSettings,
+  PaywallOffer,
+  Identity,
+  AuthSession
+} from '@monetize.software/sdk-react';
+```
+
+`PaywallUserState` (the discriminated union returned by `usePaywallUser()`) is exported directly from `@monetize.software/sdk-react`:
+
+```ts
+import type { PaywallUserState } from '@monetize.software/sdk-react';
+```
+
+Single source of truth is still `@monetize.software/sdk` — this is pure pass-through.
+
+## Next steps
+
+<Cards>
+  <Cards.Card title="Hooks" href="/docs-v2/sdk-v3/react/hooks" description="Hook-by-hook walkthrough: re-render rules, SSR behaviour." />
+  <Cards.Card title="Components" href="/docs-v2/sdk-v3/react/components" description="PaywallGate / PaywallButton / PaywallSupportButton — patterns and render props." />
+  <Cards.Card title="Quickstart — SaaS Web" href="/docs-v2/guide/sdk-v3-web" description="End-to-end integration into a React SaaS." />
+  <Cards.Card title="Next.js example" href="https://github.com/monetize-software/sdk-examples/tree/main/nextjs" description="Runnable Next.js 16 + App Router app exercising every public hook and component." />
+</Cards>

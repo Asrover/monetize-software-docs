@@ -2,38 +2,27 @@ import { Steps, Cards, Callout, Tabs } from "nextra/components";
 
 # Quickstart
 
-Start monetizing your application in 10 minutes. Choose the right SDK and follow step-by-step instructions for quick integration.
-
-## Choose the Right SDK
-
-The platform provides four integration approaches to suit your needs:
-
-| Mode                                                  | Advantages                                                                                                                                                | Perfect for                                                                                            | Notes                                                                              |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| **SDK v3** — Recommended for new projects             | Bundled npm package; No iframe (Shadow DOM); Headless mode for server-side; Chrome Extension MV3 support out of the box; Modular (`/core`, `/ui`, `/full`) | Modern web apps, SPAs, Chrome / Edge MV3 extensions, Telegram Mini Apps, server-side billing            | Requires a bundler (npm pkg, no CDN)                                               |
-| **SDK v2** — Client-Side legacy                       | Single `<script>` tag, no build step; iframe modal; works on plain HTML landings                                                                          | Landing pages without a build step, legacy projects already on v2                                       | Will not pass Chrome Web Store review for new extensions                            |
-| **Server-Side SDK** — For Custom Solutions            | Full control over user experience; Custom interface design; Complex business logic; Integration with existing systems                                     | Custom platforms; Complex workflows; CRM/ERP integration; Mobile applications                          | Requires more work: you need to build your own interfaces and authentication logic |
-| **Hybrid Mode** — Best of Both Worlds                 | Client SDK's ready UI components; Server-side business logic control                                                                                      | Custom backend integration; Teams wanting UI flexibility with backend control                          | Requires more work: you need to build authentication logic                         |
+Start monetizing your application in 10 minutes. Follow step-by-step instructions for quick integration.
 
 ---
 
-## Check out for our guides
+## Check out our guides
 
 <Cards>
   <Cards.Card
-    title="Creating SaaS Subscription"
-    href="/docs-v2/guide/subscription-saas"
-    description="Complete guide to setting up a subscription model for your SaaS product. Perfect for beginners."
+    title="SDK 3.0 — SaaS Web"
+    href="/docs-v2/guide/sdk-v3-web"
+    description="End-to-end SaaS subscription on the web: BillingClient gate, paywall modal, and webhook handler to sync state to your DB."
   />
   <Cards.Card
-    title="AI Chat with Pay-per-Request"
-    href="/docs-v2/guide/ai-chat"
-    description="Step-by-step guide to creating an AI chat with token-based monetization and fair cost distribution."
+    title="SDK 3.0 — Chrome Extension"
+    href="/docs-v2/guide/sdk-v3-extension"
+    description="MV3 extension with offscreen document, shared auth across popup + content scripts, and the CWS review checklist."
   />
   <Cards.Card
-    title="Existing Service Integration"
-    href="/docs-v2/guide/existing-service-integration"
-    description="Advanced guide to integrating monetize.software with your existing application using server-side SDK."
+    title="SDK 3.0 — Headless / Server"
+    href="/docs-v2/guide/sdk-v3-headless"
+    description="Bring-your-own auth + custom UI: server-side checkout, metered AI proxy via ApiGatewayClient, webhook sync."
   />
 </Cards>
 
@@ -45,7 +34,7 @@ Bundled npm package, Shadow DOM modal, headless mode for backends. Pick the chan
 
 ### Step 1: Create a paywall
 
-In the dashboard → **Paywalls** → **New Paywall**, choose **Client Mode**. Configure plans and payment processor. Note the numeric `paywallId` from the URL.
+In the dashboard → **Paywalls** → **New Paywall**. Configure plans and payment processor.
 
 ### Step 2: Install the SDK
 

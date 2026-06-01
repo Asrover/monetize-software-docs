@@ -1,0 +1,385 @@
+import { Callout, Table } from 'nextra/components';
+
+# BillingClient — bootstrap and caching
+
+`BillingClient.bootstrap()` loads the entire "structural" half of the paywall in a single round-trip: settings, prices, offers, layout, locales, and a snapshot of the current user state. This is the SDK's first network call on the page — how fast the modal becomes visible depends on it.
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+
+const paywall = new PaywallUI({ paywallId: '3', apiOrigin: 'https://api.example.com' });
+await paywall.billing.bootstrap(); // 1 request, ≤1s on a cold tab
+```
+
+The SDK caches the response aggressively — for typical integrations (popup + content scripts) bootstrap rarely hits the network after that.
+
+## What gets persisted
+
+Bootstrap is written to the `StorageAdapter` under the key `pw-{paywallId}-bootstrap-v1`:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Environment</Table.Th>
+      <Table.Th>Location</Table.Th>
+      <Table.Th>Shared across</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Chrome Extension</Table.Td>
+      <Table.Td>`chrome.storage.local`</Table.Td>
+      <Table.Td>popup, content scripts in every tab, service worker</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Web</Table.Td>
+      <Table.Td>`localStorage`</Table.Td>
+      <Table.Td>every tab on the same origin</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>SSR / e2e / Node</Table.Td>
+      <Table.Td>in-memory map</Table.Td>
+      <Table.Td>current process only</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  The `user` part of the snapshot is persisted under a separate, identity-bound key — switching accounts won't leak the previous user's state into the new session.
+</Callout>
+
+## Lifecycle of a single `bootstrap()`
+
+The decision to hit the network vs return cache is made against three thresholds:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Age of cached payload</Table.Th>
+      <Table.Th>Behaviour</Table.Th>
+      <Table.Th>Network requests</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>≤ 5 minutes</Table.Td>
+      <Table.Td>Return cached **instantly**, no revalidate</Table.Td>
+      <Table.Td>0</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>5 minutes — 1 hour (stale-while-revalidate)</Table.Td>
+      <Table.Td>Return cached instantly + background request with `?if_version=`</Table.Td>
+      <Table.Td>1 (short 304-like response when the version is unchanged)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>&gt; 1 hour (TTL expired)</Table.Td>
+      <Table.Td>Blocking full request</Table.Td>
+      <Table.Td>1</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`bootstrap({ force: true })`</Table.Td>
+      <Table.Td>Blocking request, cache ignored</Table.Td>
+      <Table.Td>1</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Parallel calls
+
+Two simultaneous `bootstrap()` calls (e.g. popup mount in parallel with content-script init on the same page) share one HTTP request — both callers resolve from the same response.
+
+### Cross-context sync
+
+Any context (popup, content script in another tab, service worker) that writes a fresh bootstrap to storage triggers `chrome.storage.onChanged` (or the `storage` event on web). Every other `BillingClient` instance gets the fresh payload **without a network request** through `StorageAdapter.watch()`.
+
+Example: the user opens the popup → the SDK fetches bootstrap → writes it to `chrome.storage.local` → 12 open tabs with content scripts refresh their caches without an HTTP request.
+
+## Invalidation: what the client sees after an admin edit
+
+The backend returns a `version` hash of the structural part of the payload (settings, prices, offers, layout, locales — everything except `user`). Background revalidates send `?if_version=<v>`; on a match the backend returns a tiny `{ unchanged: true, version, user }`, so cache hits stay cheap.
+
+The full chain from "admin clicked Save" to "user sees the change":
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Stage</Table.Th>
+      <Table.Th>Latency</Table.Th>
+      <Table.Th>Bottleneck</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>1. DB write (platform store)</Table.Td>
+      <Table.Td>instant</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>2. `revalidateTag` on the server cache (online)</Table.Td>
+      <Table.Td>instant after fan-out from platform</Table.Td>
+      <Table.Td>Cache fan-out across edge nodes — a partial failure can leave stale responses on a few nodes briefly</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>3. Client with an **active** persisted cache (≤5 min)</Table.Td>
+      <Table.Td>**Won't auto-refresh** — needs a new `bootstrap()` after crossing the threshold</Table.Td>
+      <Table.Td>5-minute stale threshold</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>4. Client with a **stale** cache (5min — 1h)</Table.Td>
+      <Table.Td>UI renders from stale; 1–2s after revalidate `onBootstrapChange` swaps in fresh data</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>5. Client with an **expired** cache (&gt;1h) or a cold tab</Table.Td>
+      <Table.Td>Fresh data on the next `bootstrap()`</Table.Td>
+      <Table.Td>1-hour persist TTL</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  A user who keeps the tab open and doesn't invoke `bootstrap()` again **won't see the change automatically**. The SDK doesn't push updates — there's no WebSocket/SSE. To forcibly refresh active instances, either call `paywall.billing.bootstrap({ force: true })` explicitly, or wait for the next UI mount (popup / modal open).
+</Callout>
+
+## API
+
+### `bootstrap(opts?)`
+
+```ts
+billing.bootstrap(): Promise<PaywallBootstrap>;
+billing.bootstrap(force: boolean): Promise<PaywallBootstrap>;        // legacy
+billing.bootstrap({ force?: boolean; signal?: AbortSignal }): Promise<PaywallBootstrap>;
+```
+
+- `force: true` — ignores cache and TTL, always hits the network. Use after explicit actions that definitely changed paywall state (admin mode, hotfix flows).
+- `signal` — `AbortSignal` for cancellation. Useful when unmounting a React component.
+
+### `onBootstrapChange(cb)`
+
+```ts
+const unsubscribe = billing.onBootstrapChange((bootstrap) => {
+  console.log('bootstrap updated, new version:', bootstrap.version);
+  // re-render UI
+});
+```
+
+Fires **only on a real `version` change**: a background revalidate that returned `unchanged: true` does not invoke the listener. Ideal for UI frameworks — no spurious re-renders.
+
+### `getCachedBootstrap()`
+
+```ts
+billing.getCachedBootstrap(): PaywallBootstrap | null;
+```
+
+Sync access to the last loaded bootstrap. `null` means no successful request yet. Handy for post-checkout logic that needs to read `settings.success_redirect_url` without an `await`.
+
+### `getPrices(opts?)` / `getCachedPrices()`
+
+A shortcut over `bootstrap()` — returns the paywall's price array so the host can render pricing cards outside the modal (on a landing page, "/pricing" page, tier widget).
+
+```ts
+billing.getPrices(opts?: { force?: boolean; signal?: AbortSignal }): Promise<PaywallPrice[]>;
+billing.getCachedPrices(): PaywallPrice[] | null;
+
+// Same thing at the PaywallUI level:
+paywall.getPrices(opts?): Promise<PaywallPrice[]>;
+paywall.getCachedPrices(): PaywallPrice[] | null;
+```
+
+Cache semantics are identical to `bootstrap()` (5 min stale-while-revalidate + 1 hour persist TTL, in-flight dedupe). Locale overrides for `label`/`description` under `navigator.language` are applied automatically — the array is render-ready.
+
+<Callout type="info">
+  Prices are part of bootstrap, so `getPrices()` doesn't fire a separate request. If bootstrap is already loaded — synchronous return from cache. If not — one network request for the whole paywall structure, after which `getCachedBootstrap()` is also populated.
+</Callout>
+
+<Callout type="info">
+  Using `@monetize.software/sdk-react`? See [`usePaywallPrices`](/docs-v2/sdk-v3/react/hooks#usepaywallprices) — it wraps `getCachedPrices` + `onBootstrapChange` with proper `useSyncExternalStore` semantics.
+</Callout>
+
+For subscriptions to price changes (admin updates a plan → revalidate picks up the new version) use `onBootstrapChange` — `getPrices` does not expose its own listener (that would be redundant API on the same source of truth).
+
+### `PaywallPrice` fields
+
+```ts
+interface PaywallPrice {
+  id: string;
+  currency: string;          // ISO 4217: 'USD', 'EUR', ...
+  amount: number;            // in minor units (cents)
+  interval: 'month' | 'year' | 'week' | 'day' | 'lifetime' | null;
+  interval_count: number | null;
+  trial_days: number | null; // card trial: free days AFTER payment
+  label?: string | null;     // override from admin / locale
+  description?: string | null;
+  local?: { currency: string; amount: number } | null; // geo-converted price
+}
+```
+
+### `getUser(opts?)` / `getCachedUser()` / `onUserChange(cb)`
+
+```ts
+billing.getUser(opts?: { force?: boolean; signal?: AbortSignal }): Promise<PaywallUser>;
+billing.getCachedUser(): PaywallUser | null;
+billing.onUserChange(cb: (user: PaywallUser) => void, opts?: { immediate?: 'microtask' | 'sync' | 'none' }): () => void;
+```
+
+Returns the paywall user (`has_active_subscription` / `purchases` / `trial` / `had_previous_trial`). Uses the same persistence + stale-while-revalidate model as bootstrap, plus identity-aware storage key.
+
+```ts
+const user = await billing.getUser();
+if (user.has_active_subscription) enablePremium();
+```
+
+`PaywallUser` shape — in [Events → PaywallUser](/docs-v2/sdk-v3/events#paywalluser).
+
+### `createCheckout(params)`
+
+Returns a checkout URL for the chosen `priceId`. Use it when you drive your own buy buttons (custom pricing page, landing-page cards, in-app "Upgrade" button) and want to redirect to the payment provider yourself — instead of opening the bundled paywall via `paywall.open()`.
+
+```ts
+billing.createCheckout(params: {
+  priceId: string;
+  successUrl?: string;
+  errorUrl?: string;
+  shopUrl?: string;
+  trialDays?: number;
+  /** Idempotency key — duplicate clicks on the same key return the same
+   *  checkout URL. SDK generates a UUID v4 if omitted. */
+  idempotencyKey?: string;
+  /** Renewal/upgrade flow — passes `ignoreActivePurchase: true` to the backend
+   *  so /start-checkout doesn't return 409 for an already-subscribed user. */
+  ignoreActivePurchase?: boolean;
+  signal?: AbortSignal;
+}): Promise<CheckoutResult>;
+```
+
+```ts
+interface CheckoutResult {
+  url: string;
+  sessionId?: string;
+  acquiring?: 'stripe' | 'paddle' | 'chargebee' | 'overpay' | 'freemius';
+}
+```
+
+Requires an `identity.email` (or a connected `AuthClient`). Without one — throws `identity_required`. If the user already has an active subscription the backend returns 409 + `{ hasActivePurchase: true }` — the SDK normalizes this into `PaywallError('already_purchased', { status: 409 })`. To bypass for renewal/upgrade flows, pass `ignoreActivePurchase: true`.
+
+Parallel clicks on the same `priceId` (or `idempotencyKey`) collapse to one request — both callers get the same checkout URL.
+
+### `getBalances(opts?)` / `getCachedBalances()` / `onBalanceChange(cb, opts?)` / `refreshBalances()` / `decrementBalanceLocal(queryType)`
+
+Balance APIs for AI providers (`tokenization_queries`). Same persistence model as bootstrap with tighter thresholds (30s stale, 5min TTL) and identity-bound storage keys.
+
+```ts
+billing.getBalances(): Promise<Balance[]>;
+billing.getCachedBalances(): Balance[] | null;
+billing.onBalanceChange(cb: (balances: Balance[]) => void, opts?: { immediate?: 'microtask' | 'sync' | 'none' }): () => void;
+billing.refreshBalances(): Promise<Balance[]>;
+billing.decrementBalanceLocal(queryType: string | undefined): void; // optimistic
+```
+
+`Balance: { type: string; count: number }`. Details and SSE example — in [API Gateway](/docs-v2/sdk-v3/api-gateway).
+
+### Customer portal — `getCustomerPortalUrl()` / `listPurchases()` / `cancelSubscription()`
+
+For your own customer-portal UI ("My subscriptions" page). Bearer auth required (or a server `apiKey`).
+
+```ts
+billing.getCustomerPortalUrl(opts?: { signal?: AbortSignal }): Promise<{ url: string }>;
+billing.listPurchases(opts?: { signal?: AbortSignal }): Promise<PaywallPurchaseDetailed[]>;
+billing.cancelSubscription(params: {
+  subscriptionId: string;
+  reason: string;
+  signal?: AbortSignal;
+}): Promise<{ subscription: { status, canceled_at, cancel_at, cancel_at_period_end } }>;
+```
+
+See [Customer portal](/docs-v2/sdk-v3/customer-portal) for the full end-to-end pattern (list → cancel/renew → open external portal).
+
+### `createSupportTicket(payload)`
+
+```ts
+billing.createSupportTicket(payload: {
+  subject: string;
+  content: string;
+  email?: string;     // explicit override, otherwise identity.email
+  files?: File[];     // when present, switches the request to multipart/form-data
+}): Promise<{ ticket: { id: number; status: string } }>;
+```
+
+Useful when you want to drive the support form yourself instead of opening `paywall.openSupport()`. Bearer auth, if present, overrides any `email` on the backend to prevent spoofing.
+
+### `setIdentity(identity?)` / `getIdentity()`
+
+Manually swap the identity that BillingClient uses for headers (`X-User-Id`), checkout email and identity-bound storage keys. With a connected `AuthClient`, identity is auto-synced from `auth.user` on every `onAuthChange` — explicit `setIdentity` will be overwritten after the next auth event.
+
+```ts
+billing.setIdentity({ email: 'user@example.com', userId: 'usr_123' });
+billing.getIdentity(); // → { email, userId, anonymousId } | undefined
+```
+
+### `getVisitorId()` / `getCachedVisitorId()` / `getStorage()`
+
+Low-level helpers. `getVisitorId()` resolves the stable UUID v4 from storage (used by `EventTracker`); `getStorage()` exposes the `StorageAdapter` instance for callers that want to write under custom keys.
+
+### `setBootstrap(partial)`
+
+```ts
+billing.setBootstrap(partial: Partial<PaywallBootstrap>): void;
+```
+
+Preview/editor-only setter. In `preview: true` mode the host can mutate the cached bootstrap for live preview in the admin editor. In production mode this is a no-op.
+
+## Balances — same approach
+
+`BillingClient.getBalances()` (AI providers × tokenization queries) uses the same model: persist + stale-while-revalidate + cross-context sync. Differences:
+
+- **Identity-bound storage**: balances are scoped to the current identity. Calling `setIdentity` transparently rebinds the cross-context watcher to the new user's data.
+- **Tighter thresholds**: 30-second stale, 5-minute persist TTL. Balance only changes after payment or an API-gateway call, so it doesn't need an hour-long TTL.
+- **Optimistic updates**: `decrementBalanceLocal()` (invoked automatically after a successful `ApiGatewayClient.call()`) updates the local balance immediately. Other tabs pick up the change without an HTTP request.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Age of cached balances</Table.Th>
+      <Table.Th>Behaviour</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>≤ 30 seconds</Table.Td>
+      <Table.Td>Return cached, no network</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>30 seconds — 5 minutes</Table.Td>
+      <Table.Td>Stale-while-revalidate: cached instantly + background `/balances`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>&gt; 5 minutes</Table.Td>
+      <Table.Td>Blocking `/balances`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`force: true`</Table.Td>
+      <Table.Td>Blocking, cache ignored</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  Unlike bootstrap, balances have **no** version/`if_version` — it's just an array of `{ type, count }`. Cross-context sync resolves conflicts by timestamp (`at`): whoever wrote latest wins.
+</Callout>
+
+## Cache windows
+
+Defaults work well for Chrome extensions with a popup and content scripts running across many tabs:
+
+- **Stale threshold — 5 minutes.** Repeated `bootstrap()` calls within this window return cached data instantly, no network.
+- **Persist TTL — 1 hour.** The longest the SDK trusts a persisted payload without a fresh network check.
+
+If you need faster reaction to admin edits, force a refresh on the actions that should reflect new state:
+
+```ts
+await paywall.billing.bootstrap({ force: true });
+```
+
+## Server-side usage
+
+Every `BillingClient` method works headlessly. For `apiKey`-based flows (`createCheckout`, `getCustomerPortalUrl`, `createSupportTicket`), per-user Bearer (`listPurchases`, `cancelSubscription`), token withdrawal, webhook handlers, and storage adapters for Node / Edge runtimes — see [Headless / server-side](/docs-v2/sdk-v3/headless-server).

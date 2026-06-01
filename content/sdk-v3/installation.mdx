@@ -1,0 +1,192 @@
+import { Callout, Table, Tabs } from 'nextra/components';
+
+# Installation
+
+SDK 3.0 ships as an npm package and renders without an iframe in a Shadow DOM. For web you can also load it via ESM CDN (`esm.sh`/`unpkg`/`jsDelivr`); for Chrome extensions the only option is the bundled npm package (CWS review forbids remote code).
+
+## Website / SPA
+
+<Tabs items={['npm (recommended)', 'ESM CDN (no build step)']}>
+<Tabs.Tab>
+
+```bash
+pnpm add @monetize.software/sdk
+# or: npm i @monetize.software/sdk / yarn add @monetize.software/sdk
+```
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN'
+});
+
+paywall.open(); // native Shadow DOM, no iframe
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+Good for landing pages and projects without a bundler — the browser pulls ESM deps itself.
+
+```html
+<script type="module">
+  import { PaywallUI } from 'https://esm.sh/@monetize.software/sdk@3';
+
+  const paywall = new PaywallUI({
+    paywallId: '3',
+    apiOrigin: 'https://YOUR_DOMAIN'
+  });
+
+  document.getElementById('upgrade').addEventListener('click', () => paywall.open());
+</script>
+```
+
+CDN alternatives — `https://unpkg.com/@monetize.software/sdk@3/dist/index.js` or `https://cdn.jsdelivr.net/npm/@monetize.software/sdk@3/dist/index.js`.
+
+<Callout type="warning">
+  **Pin the major version** (`@monetize.software/sdk@3`), don't use `@latest` in production. A surprise major release will break your integration.
+</Callout>
+
+<Callout type="warning">
+  **CDN is forbidden in Chrome extensions** — CWS review won't pass remote code execution. For extensions, use the bundled npm package only (see below).
+</Callout>
+
+</Tabs.Tab>
+</Tabs>
+
+## Chrome Extension (MV3)
+
+For extensions there's a dedicated package `@monetize.software/sdk-extension`. It wraps SDK 3.0 in an **offscreen document** so a single state (auth session, bootstrap cache, trial counter, analytics) is shared across the popup, content scripts in every tab, and the service worker.
+
+<Callout type="info">
+**Working reference extension:**
+[github.com/monetize-software/sdk-examples/tree/main/browser-extension](https://github.com/monetize-software/sdk-examples/tree/main/browser-extension)
+— full MV3 setup: SW + offscreen + popup + content-script, floating
+Shadow-DOM widget, ApiGatewayClient with quota-driven auto-open, and a
+two-config vite build (ESM for SW/offscreen/popup, IIFE for content).
+Clone, set two env vars, `npm install && npm run build`, load `dist/`
+in `chrome://extensions`.
+</Callout>
+
+```bash
+pnpm add @monetize.software/sdk-extension preact
+```
+
+**When to use `@monetize.software/sdk-extension` vs plain `@monetize.software/sdk`:**
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Scenario</Table.Th>
+      <Table.Th>Package</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Extension with popup + content scripts across tabs — sign-in in the popup should reflect on every tab instantly</Table.Td>
+      <Table.Td>`@monetize.software/sdk-extension`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Popup only, no content scripts; or only one extension page (options)</Table.Td>
+      <Table.Td>`@monetize.software/sdk` — sufficient</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### Minimal `manifest.json`
+
+```json
+{
+  "manifest_version": 3,
+  "name": "My Extension",
+  "version": "1.0.0",
+  "permissions": ["offscreen", "storage"],
+  "host_permissions": ["https://YOUR_DOMAIN/*"],
+  "background": { "service_worker": "sw.js", "type": "module" }
+}
+```
+
+Optional permissions:
+
+- `"content_scripts"` — if you want to render the paywall on third-party pages (not just the popup).
+
+<Callout type="info">
+  OAuth (Google / Apple / etc) **does not** require the `"identity"` permission — the SDK opens a popup window against your `apiOrigin` instead of using `chrome.identity`.
+</Callout>
+
+### `host_permissions` — what to pick
+
+`host_permissions` control two things: where the extension can `fetch` (from offscreen / SW / content-script) and which origins the content-script can inject into (together with `content_scripts.matches`).
+
+This is the **primary signal** for Chrome Web Store review and AV vendors (Avast/Kaspersky/Norton). The narrower `host_permissions`, the less suspicion.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Extension host scenario</Table.Th>
+      <Table.Th>Recommendation</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Extension already needs `<all_urls>` (recorder, all-site assistant, tool like Grammarly)</Table.Td>
+      <Table.Td>Keep `<all_urls>`. SDK works as-is. **Note:** CWS review with `<all_urls>` goes through a manual audit and takes longer; AV vendors are more likely to flag such extensions as PUA. That's the cost of broad injection, not an SDK risk.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Extension only talks to **your backend** and paywalls its own features (popup tool, side-panel app)</Table.Td>
+      <Table.Td>Do **NOT** request `<all_urls>`. Your apiOrigin is enough: `["https://api.your-domain.com/*"]`. No content-script injection on every site needed.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Hybrid — popup tool plus content script on a narrow list of domains</Table.Td>
+      <Table.Td>Constrain `host_permissions` + `content_scripts.matches` to those domains: `["https://*.your-target.com/*", "https://api.your-domain.com/*"]`.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **Keep `<all_urls>` only when it's genuinely needed for UX**, and be ready to justify it in the CWS "Permission justification" field. "So the paywall works" is a bad justification; the SDK itself doesn't require `<all_urls>`.
+</Callout>
+
+### Initializing the three contexts
+
+```ts
+// service-worker.ts
+import { installRouter } from '@monetize.software/sdk-extension/sw';
+installRouter({ offscreenUrl: chrome.runtime.getURL('offscreen.html') });
+```
+
+```ts
+// offscreen.ts (loaded from offscreen.html)
+import { startOffscreenServer } from '@monetize.software/sdk-extension/offscreen';
+startOffscreenServer({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+```
+
+```ts
+// content-script.ts (or popup.ts / options.ts)
+import { PaywallUI } from '@monetize.software/sdk-extension';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+paywall.open(); // same API as plain @monetize.software/sdk
+```
+
+Under the hood, content-script `PaywallUI` is a proxy via a chrome port into the offscreen document. All network traffic, auth refresh, and storage happen in offscreen; content only paints UI.
+
+## Telegram Mini App
+
+Use the same `@monetize.software/sdk` you'd use on the web — a Telegram WebView is a regular browser context. Bundle size matters (Mini App start is blocked by load), so import narrowly:
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui'; // not from the full root
+```
+
+OAuth inside Telegram has its own quirks — see [Authentication → OAuth](/docs-v2/sdk-v3/auth/oauth#telegram-mini-app).

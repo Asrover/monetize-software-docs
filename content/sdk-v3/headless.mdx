@@ -1,0 +1,57 @@
+import { Callout, Cards } from 'nextra/components';
+
+# Headless / server-side
+
+Your own backend, your own UI, your own auth. The SDK gives you `BillingClient` and `apiKey` + `identity` from `@monetize.software/sdk/core` (Node / Bun / Deno / Edge / Workers); for any other backend language, the same endpoints are documented as plain HTTPS in the [REST API reference](/docs-v2/sdk-v3/rest-api).
+
+```ts
+import { BillingClient } from '@monetize.software/sdk/core';
+
+const billing = new BillingClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  apiKey: process.env.MONETIZE_API_KEY!
+});
+
+// Per request: bind the user from your own auth system
+billing.setIdentity({ email: user.email, userId: user.id });
+
+const { url } = await billing.createCheckout({
+  priceId: 'monthly',
+  idempotencyKey: crypto.randomUUID()
+});
+// Redirect user to url
+```
+
+## When to pick this
+
+- You already have your own auth system (Auth0 / Supabase / Clerk / hand-rolled) — and you don't want users to sign in twice.
+- You sell from a backend that isn't a JS runtime — Python, Go, PHP, Ruby, .NET, Rust.
+- You want server-rendered access checks in Next.js Server Components / Remix loaders / SvelteKit.
+- You sync subscription state to your own DB via webhooks, not via in-browser state subscriptions.
+
+## What you don't need
+
+- **Custom domain** — not strictly required for pure server-to-server. Set explicit `successUrl`/`errorUrl` per `createCheckout` and you're set ([more](/docs-v2/sdk-v3/rest-api#base-url)).
+- **A frontend in JS** — your backend talks to us via REST; your frontend talks to your own backend.
+- **Our auth** — `apiKey` + `identity` is the canonical pattern; no user has to register in monetize.software's auth system.
+
+## What's in this path
+
+<Cards>
+  <Cards.Card title="Server-side guide" href="/docs-v2/sdk-v3/headless-server" description="Full Node/Bun/Edge walkthrough — apiKey setup, identity passing, listPurchases, cancelSubscription, withdrawTokens, webhooks" />
+  <Cards.Card title="REST API" href="/docs-v2/sdk-v3/rest-api" description="Endpoint-by-endpoint reference with curl examples — for Python / Go / PHP / Ruby / .NET backends" />
+  <Cards.Card title="Webhooks" href="/docs-v2/webhooks/events" description="Subscription / payment / refund events — the source of truth for your own DB" />
+</Cards>
+
+## Cross-cutting features in this scenario
+
+<Cards>
+  <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Hosted portal redirect via getCustomerPortalUrl — or build your own with listPurchases + cancelSubscription" />
+  <Cards.Card title="Trial" href="/docs-v2/sdk-v3/trial" description="Trials run on the backend; getUser().trial reflects state without UI" />
+  <Cards.Card title="Errors" href="/docs-v2/sdk-v3/errors" description="identity_required, identity_not_on_paywall, already_purchased — codes you'll see in REST responses" />
+</Cards>
+
+<Callout type="info">
+  **Need a frontend too?** You don't have to commit to one path. Plenty of integrations are split — backend handles billing via `apiKey` + webhooks, and a small `PaywallUI` modal or React `usePaywallAccess()` hook lives in the browser for UX. See [Browser — drop-in](/docs-v2/sdk-v3/browser-paywall-ui) or [Browser — custom UI](/docs-v2/sdk-v3/browser-custom-ui).
+</Callout>

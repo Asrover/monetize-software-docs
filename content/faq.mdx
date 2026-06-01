@@ -14,43 +14,57 @@ Frequently asked questions about Monetize.software platform. Find answers to com
 <Accordion>
   <Accordion.Item title="What is Monetize.software and how does it work?" defaultOpen>
     Monetize.software is a comprehensive in-app purchase platform that helps developers monetize their applications through subscriptions and tokenized payments. The platform provides:
-    
-    - **Client-side SDK** for quick integration with ready-made UI components
-    - **Server-side SDK** for custom implementations and full control
-    - **Payment processing** through Stripe and Paddle integrations
+
+    - **SDK v3** (recommended) — bundled npm package with Shadow DOM modal, headless mode for backends, and Chrome Extension MV3 support
+    - **SDK v2** (legacy) — single `<script>` tag for quick HTML integrations without a build step
+    - **Headless / Server-side** — `BillingClient` from SDK v3 `/core` for custom UI, AI proxy via `ApiGatewayClient`, bring-your-own auth
+    - **Payment processing** through Stripe, Paddle, Chargebee, Freemius, and Overpay
     - **Analytics and reporting** to track your revenue and user behavior
-    
+
     You can choose between subscription models (monthly/yearly) or token-based payments for pay-per-use scenarios.
+  </Accordion.Item>
+
+  <Accordion.Item title="Should I use SDK v2 or SDK v3?">
+    **Use SDK v3** for any new project. It's bundled, renders without an iframe, has a headless `/core` export for backends, and is the only SDK that passes Chrome Web Store review (MV3, no remote code). See the [SDK v3 Quickstart](/docs-v2/sdk-v3/quickstart).
+
+    **Stay on SDK v2** if:
+    - You ship a plain HTML landing without a build step (drop-in `<script>` tag)
+    - You already integrated v2 and don't need the new features
+
+    v2 is in maintenance mode but supported — it isn't going away. See the [migration guide](/docs-v2/sdk-v3/migration-from-v2) when you're ready to upgrade.
   </Accordion.Item>
 
   <Accordion.Item title="How quickly can I integrate Monetize.software into my app?">
     Integration time depends on your chosen approach:
-    
-    **Client-Side SDK (Recommended for beginners):**
-    - 10-15 minutes for basic setup
-    - Ready-made UI components
-    - No custom backend required
-    
-    **Server-Side SDK (For custom solutions):**
-    - 30-60 minutes for basic integration
-    - Requires custom UI development
-    - Full control over user experience
-    
-    Both approaches include comprehensive documentation and code examples to get you started quickly.
+
+    **SDK v3 — `PaywallUI` in the browser (Recommended):**
+    - 10–20 minutes for basic web setup
+    - 30–45 minutes for a Chrome Extension (offscreen + service worker)
+    - Bundled npm package, no iframe, Shadow DOM modal
+
+    **SDK v3 — Headless / server-side:**
+    - 30–60 minutes for basic integration
+    - You build your own UI and run server-side flows (`apiKey` + `identity`, webhooks for state)
+    - Full control over UX, works from any backend (Node, Python, Go, PHP, …) — the API is a typed JS wrapper but the underlying HTTP contract is language-agnostic
+    - See [Headless / server-side](/docs-v2/sdk-v3/headless-server)
+
+    **SDK v2 — Client-Side (legacy, HTML landings):**
+    - 10–15 minutes for basic setup
+    - Single `<script>` tag, no build required
+    - Maintenance mode — new projects should use SDK v3
+
+    All approaches include comprehensive documentation and code examples to get you started quickly.
   </Accordion.Item>
 
   <Accordion.Item title="Do I need coding experience to use Monetize.software?">
-    **For Client-Side SDK:** Minimal coding required. You only need to:
-    - Copy and paste a script tag
-    - Add a few JavaScript functions
-    - Basic HTML/JavaScript knowledge is sufficient
-    
-    **For Server-Side SDK:** More technical knowledge required:
-    - Backend development experience
-    - API integration skills
-    - Understanding of webhooks and payment flows
-    
-    We provide detailed guides and examples for both approaches.
+    **SDK v3 in the browser:** Minimal frontend coding. Install the npm package, instantiate `PaywallUI` with your `paywallId`, call `paywall.open()` on your CTA button. No backend required for the basic flow — auth, checkout redirect, and state sync happen via the SDK.
+
+    **Headless / Server-side:** More technical knowledge required:
+    - Backend development experience (Node, or any language that can speak HTTP — see [Headless / server-side](/docs-v2/sdk-v3/headless-server))
+    - Webhook handling to sync subscription state to your DB
+    - Identity passing (`apiKey` + `identity` per request) when you bring your own auth
+
+    Either way the dashboard handles paywall design, pricing, trial settings, and payment processor configuration — no code needed for those.
   </Accordion.Item>
 
   <Accordion.Item title="What types of applications can use Monetize.software?">
@@ -80,22 +94,19 @@ Frequently asked questions about Monetize.software platform. Find answers to com
 
 <Accordion>
   <Accordion.Item title="Which payment processors are supported?">
-    Currently, Monetize.software supports two major payment processors:
-    
-    **Stripe:**
-    - Global coverage (190+ countries)
-    - Low transaction fees (2.9% + 30¢)
-    - Extensive card support
-    - Strong fraud protection
-    - Recommended for most businesses
-    
-    **Paddle:**
-    - Merchant of record service
-    - Handles tax compliance automatically
-    - Good for digital products
-    - Suitable for global sales
-    
-    You can connect multiple payment processors and use them for different regions or products.
+    Monetize.software supports five payment processors. You can connect multiple to one paywall and use them for different regions, products, or as fallbacks.
+
+    **Stripe** — global coverage (190+ countries), low fees (2.9% + 30¢), strong fraud protection. Recommended for most businesses.
+
+    **Paddle** — merchant of record. Handles VAT/sales-tax compliance automatically. Good for digital products with global sales.
+
+    **Chargebee** — flexible subscription billing with advanced dunning, revenue recognition, and tax tooling. Suitable for enterprises with complex billing rules.
+
+    **Freemius** — designed for WordPress plugins/themes and SaaS. Merchant of record; hosted checkout. Note: Freemius does not provide a hosted customer portal — use SDK methods (`cancelSubscription`) directly for cancel flows.
+
+    **Overpay** — alternative card acquirer with broad regional support. Useful when Stripe/Paddle reject high-risk verticals.
+
+    See [Payment Processors](/docs-v2/payment-processor/create-payment-processor) for full setup.
   </Accordion.Item>
 
   <Accordion.Item title="Can I offer trials and promotional pricing?">
@@ -124,55 +135,46 @@ Frequently asked questions about Monetize.software platform. Find answers to com
 ## Technical Integration
 
 <Accordion>
-  <Accordion.Item title="What's the difference between Client-Side and Server-Side SDK?">
-    **Client-Side SDK:**
-    
-    ✅ **Pros:**
-    - Quick 10-minute setup
-    - Ready-made UI components
-    - Built-in user authentication
-    - Automatic state management
-    - No backend development required
-    
-    ❌ **Cons:**
-    - Limited customization options
-    - Dependent on our UI design
-    - Less control over user flow
-    
-    **Server-Side SDK:**
-    
-    ✅ **Pros:**
-    - Full control over user experience
-    - Custom interface design
-    - Advanced business logic
-    - Better security control
-    - Integration with existing systems
-    
-    ❌ **Cons:**
-    - Requires more development time
-    - Need to build authentication
-    - More complex implementation
-    - Backend development required
+  <Accordion.Item title="Which SDK integration mode should I pick?">
+    SDK v3 ships as one npm package with three integration modes — pick by how much you want to own.
+
+    **`PaywallUI` (browser modal)** — drop-in:
+
+    ✅ Quick 10-minute setup, ready-made paywall in Shadow DOM, built-in OAuth/email/OTP auth, automatic state sync across tabs
+    ❌ Visual customization limited to dashboard settings (brand color, layout, copy)
+
+    **`PaywallUI` in a Chrome Extension** — same API plus a shared offscreen document:
+
+    ✅ One auth/billing state across popup, content scripts in every tab, and the service worker; passes CWS review (no remote code, no iframe)
+    ❌ Requires offscreen + service-worker setup (see the Extension guide)
+
+    **`BillingClient` headless (server-side)** — full control:
+
+    ✅ Bring-your-own auth, your own pricing/checkout UI, custom AI proxy via `ApiGatewayClient`, server-rendered access checks
+    ❌ You implement webhooks for state sync, the UI is yours to build
+
+    All three share one `paywallId` — switch modes without migrations. See [SDK v3 Quickstart](/docs-v2/sdk-v3/quickstart).
   </Accordion.Item>
 
   <Accordion.Item title="How do I handle user authentication?">
-    **Client-Side SDK:**
-    - Authentication is handled automatically
-    - Users sign in through our secure modal
-    - Social login options or anonymous sign-in
-    - Session management included
-    
-    **Server-Side SDK:**
-    - You handle authentication in your system
-    - Pass user email to create checkout sessions
-    - Receive user data through webhooks
-    - Integrate with your existing user system
-    
+    Two paths, depending on where your users live:
+
+    **Use our `AuthClient` (browser flows):**
+    - Built-in email + password, email OTP, OAuth (Google / Apple), anonymous sign-in
+    - Session persistence + automatic token refresh + cross-tab sync via the SDK
+    - Best for SPAs and Chrome extensions where you don't already have a login UI
+
+    **Bring your own auth (headless/server flows):**
+    - Use `apiKey` + `identity` (email and your stable `userId`) on every server-side call
+    - Your existing login system stays the source of truth; we use the email/userId as a binding key
+    - State sync via webhooks (`subscription.*`, `payment.*`) into your DB
+    - See [Headless / server-side](/docs-v2/sdk-v3/headless-server)
+
     **Security:**
-    - All authentication uses industry-standard encryption
-    - OAuth 2.0 for social logins
-    - PCI DSS compliant payment processing
-    - GDPR compliant data handling
+    - PKCE + per-call state nonce on OAuth (resistant to postMessage spoofing)
+    - Bearer tokens are short-lived; refresh handled automatically by the SDK
+    - PCI DSS via payment processors (checkout is hosted by Stripe/Paddle/Chargebee/etc.)
+    - apiKey is server-only — the SDK refuses to construct with it in browser context
   </Accordion.Item>
 
   <Accordion.Item title="How do webhooks work and why do I need them?">
@@ -194,16 +196,15 @@ Frequently asked questions about Monetize.software platform. Find answers to com
   </Accordion.Item>
 
   <Accordion.Item title="Can I customize the paywall appearance?">
-    **Client-Side SDK Customization:**
-    - Custom colors and branding
-    - Custom CSS injection
-    - Mobile-responsive design
-    
-    **Server-Side SDK:**
-    - Complete control over UI/UX
-    - Build your own checkout flow
-    - Custom pricing pages
-    - Integration with your design system
+    **`PaywallUI` (Shadow DOM modal):**
+    - Brand color, layout (vertical / horizontal / compact), copy, and localization — all from the dashboard
+    - Renders inside a Shadow DOM so host page CSS doesn't bleed in (and vice versa)
+    - Container customization for non-modal placement (inline, drawer) via SDK options
+
+    **Headless (`BillingClient`):**
+    - Full control — render your own pricing page, your own buttons, your own UX
+    - `billing.bootstrap()` gives you `prices`, `offers`, `settings`, `locales` to render however you want
+    - `billing.createCheckout({ priceId })` returns the URL — you redirect when ready
   </Accordion.Item>
 </Accordion>
 
@@ -229,10 +230,10 @@ Frequently asked questions about Monetize.software platform. Find answers to com
     
     **Refund Process:**
     1. Customer requests refund
-    2. You approve in Stripe/Paddle dashboard
-    3. Webhook notifies your system
+    2. You approve in the payment processor's dashboard (Stripe, Paddle, Chargebee, Freemius, or Overpay)
+    3. Webhook (`refund.created`) notifies your system
     4. User access automatically removed
-    5. Refund processed by payment processor
+    5. Refund processed by the payment processor
     
     **Best Practices:**
     - Clearly state refund policy

@@ -1,0 +1,224 @@
+import { Callout, Steps, Tabs, Table } from 'nextra/components';
+
+# OAuth (Google, Apple)
+
+One-click sign-in via Google or Apple. Under the hood — a PKCE flow through a popup: the SDK generates a code verifier, opens the popup at the provider's authorize URL through the platform, exchanges the one-time code for an `AuthSession` after the popup returns.
+
+```ts
+const session = await auth.signInWithOAuth({ provider: 'google' });
+```
+
+The method is async: resolves after the full cycle (popup opened → user signed in at the provider → callback page posted the code → backend exchanged it for a session).
+
+## signInWithOAuth
+
+<Tabs items={['Signature', 'Parameters', 'Returns']}>
+  <Tabs.Tab>
+    ```ts
+    auth.signInWithOAuth(input: {
+      provider: 'google' | 'apple' | 'github' | 'facebook';
+      scopes?: string;
+      userMeta?: Record<string, string>;
+    }): Promise<AuthSession>
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    <Table>
+      <thead>
+        <Table.Tr>
+          <Table.Th>Field</Table.Th>
+          <Table.Th>Default</Table.Th>
+          <Table.Th>What it does</Table.Th>
+        </Table.Tr>
+      </thead>
+      <tbody>
+        <Table.Tr>
+          <Table.Td>`provider`</Table.Td>
+          <Table.Td>—</Table.Td>
+          <Table.Td>`'google'` or `'apple'`. The type also accepts `'github'` / `'facebook'` for future use but those aren't live on the platform yet.</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>`scopes`</Table.Td>
+          <Table.Td>—</Table.Td>
+          <Table.Td>Extra provider scopes (space-separated). For Google, `openid email profile` is implied — add only if you need API access (e.g. `https://www.googleapis.com/auth/calendar.readonly`).</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>`userMeta`</Table.Td>
+          <Table.Td>—</Table.Td>
+          <Table.Td>Custom metadata to store against the user on this paywall — same as in `signInWithEmail`.</Table.Td>
+        </Table.Tr>
+      </tbody>
+    </Table>
+  </Tabs.Tab>
+  <Tabs.Tab>
+    `Promise<AuthSession>` — resolves only on full success. Popup close, provider rejection, timeout — every case throws a `PaywallError` (see below).
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="warning">
+  **Call from a user gesture only.** `window.open` is blocked by browsers when called outside a click/tap handler. If you fire OAuth automatically (e.g. on first app load) the popup is always blocked and the method throws `popup_blocked`.
+</Callout>
+
+## Setup — none required
+
+Google and Apple are available on every paywall by default. The OAuth applications, redirect URIs, and platform credentials are wired up by monetize.software — you don't manage them and there is no toggle to flip.
+
+You can call `signInWithOAuth({ provider: 'google' })` or `signInWithOAuth({ provider: 'apple' })` immediately after `new AuthClient(...)` / `new PaywallUI({ auth: true })`.
+
+<Callout type="info">
+  **No CORS / Allowed Origins config needed.** SDK 3.0 uses Bearer auth (not cookies) and our API has open CORS by design. The host of your site or extension doesn't need to be whitelisted anywhere.
+</Callout>
+
+<Callout type="info">
+  **`OAuthProvider` type includes `'github'` and `'facebook'`** — these are reserved for future support. Right now only `'google'` and `'apple'` are wired up on the platform; calls with the other two will fail.
+</Callout>
+
+## How the flow works
+
+The SDK opens a popup at the provider via our auth backend, the callback page `postMessage`s the authorization code back to the SDK, and the SDK exchanges it for a session — all PKCE-protected.
+
+For your app, this is one `await auth.signInWithOAuth({ provider })` call. When it resolves, the session is already persisted and `onAuthChange` has fired. See [Security](#security) below for the threat model.
+
+## Platform notes
+
+### Web / SPA
+
+Plain `window.open` works out of the box. No configuration needed.
+
+### Chrome Extension (MV3)
+
+The basic flow works too: the SDK calls `window.open` from a content script or a built-in extension page, the popup opens on our domain, postMessage returns to the opener.
+
+**Gotcha: some providers (Apple especially) check `referer` and may refuse** if the popup opens without a top-level context. The fix is a custom `openPopup`:
+
+```ts
+const auth = new AuthClient({
+  paywallId: 'pw_123',
+  openPopup: (url, name) => {
+    // option 1 — chrome.windows.create (opens a standalone browser window)
+    chrome.windows.create({ url, type: 'popup', width: 480, height: 640 });
+    // returning a Window-like object is harder — chrome.windows requires polling
+    // via chrome.windows.onRemoved → forward to the SDK through events.
+    // If you don't need it — option 2.
+
+    // option 2 — regular window.open stays
+    return window.open(url, name, 'width=480,height=640,popup=yes');
+  }
+});
+```
+
+<Callout type="warning">
+  **`chrome.identity.launchWebAuthFlow` is not supported.** It uses a per-extension redirect URL (`https://<extension-id>.chromiumapp.org/...`) that isn't pre-registered with OAuth providers. Use a normal popup against the SDK's default callback instead.
+</Callout>
+
+### Telegram Mini App
+
+There's no full `window.open` inside a Telegram WebView — the embedded browser opens links in the system browser. OAuth works there via `window.Telegram.WebApp.openLink()` switching to a browser, but the callback has to come back to the Mini App via a deep link. That's non-standard — `signInWithOAuth` doesn't fit directly; you'd need a custom wrapper. If you need this, contact support.
+
+## Errors
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>`code`</Table.Th>
+      <Table.Th>When</Table.Th>
+      <Table.Th>What to show</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`popup_blocked`</Table.Td>
+      <Table.Td>Browser blocked the popup (call outside a user gesture).</Table.Td>
+      <Table.Td>"Sign in with Google" button with an explicit re-click.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_cancelled`</Table.Td>
+      <Table.Td>User closed the popup before completion.</Table.Td>
+      <Table.Td>Silently return to the login screen.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_failed`</Table.Td>
+      <Table.Td>Provider returned an error (e.g. user denied access).</Table.Td>
+      <Table.Td>"Couldn't sign in, try another method".</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_timeout`</Table.Td>
+      <Table.Td>5 minutes without a code from the popup (user abandoned without closing).</Table.Td>
+      <Table.Td>Silently cancel and offer to start over.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`oauth_unavailable`</Table.Td>
+      <Table.Td>SDK called from Node.js or another runtime without `window`.</Table.Td>
+      <Table.Td>Developer bug.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`exchange_failed` / 401</Table.Td>
+      <Table.Td>the platform's auth backend rejected the code (stolen-from-logs code, state typo).</Table.Td>
+      <Table.Td>"Session expired, please try again".</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Full example
+
+```tsx
+function GoogleSignInButton() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await auth.signInWithOAuth({ provider: 'google' });
+      // ✅ session is already in AuthClient, onAuthChange fired, BillingClient picked it up
+    } catch (e) {
+      if (!(e instanceof PaywallError)) throw e;
+      switch (e.code) {
+        case 'oauth_cancelled':
+          // user changed their mind — say nothing
+          break;
+        case 'popup_blocked':
+          setError('The browser blocked the window. Click again.');
+          break;
+        default:
+          setError("Couldn't sign in. Try another method.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button onClick={handleClick} disabled={loading}>
+        {loading ? 'Opening window…' : 'Sign in with Google'}
+      </button>
+      {error && <div className="error">{error}</div>}
+    </>
+  );
+}
+```
+
+## Low-level: `startOAuthFlow` / `completeOAuthFlow`
+
+Split the OAuth handshake when you need to run the popup and the code exchange in different processes — for example, the `@monetize.software/sdk-extension` offscreen architecture, where the popup lives in a content script but the exchange must happen in the offscreen document.
+
+```ts
+const { authorize_url, state } = await auth.startOAuthFlow({ provider: 'google' });
+// open the popup yourself, capture the code via your own transport
+const session = await auth.completeOAuthFlow({ state, code });
+```
+
+In a normal browser context, prefer `signInWithOAuth` — it handles popup + exchange in one call.
+
+## Security
+
+- **Code verifier** — a secret for the duration of the OAuth flow. The SDK keeps it in the method's closure (not in storage); it won't survive a page reload. If the user hard-reloads mid-OAuth, the code arrives at an opener that's gone and there's nothing to resolve. This is by design: the verifier ↔ code pair must be atomic.
+- **State** — the nonce that defends against postMessage spoofing. The SDK never reuses one.
+- **Redirect URI** — a fixed monetize.software callback (`/paywall/v3/auth/callback`). You don't configure it, and there's no per-customer redirect surface to misconfigure.
+
+## Next steps
+
+- [Session management](/docs-v2/sdk-v3/auth/session) — what to do after success.
+- [Error codes](/docs-v2/sdk-v3/errors) — full list of `PaywallError.code`.

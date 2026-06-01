@@ -1,0 +1,80 @@
+import { Callout, Cards } from 'nextra/components';
+
+# Anonymous Sign-in (SDK v2)
+
+How to work with anonymous users from the **legacy Client-Side SDK** (`wall.x.x.js` script tag). For the bigger picture and dashboard toggle, see [Paywall → Anonymous sign-in](/docs-v2/paywall/anonymous-sign-in). For SDK v3, see [SDK v3 → Anonymous sign-in](/docs-v2/sdk-v3/auth/anonymous).
+
+<Callout type="info">
+  **Tokenized paywalls only.** Anonymous sign-in is only available when the paywall has tokenization enabled and `allow_anonymous` is on in paywall settings.
+</Callout>
+
+## Detecting an Anonymous User
+
+The legacy SDK does not have a dedicated `isAnonymous` method. Anonymous users are detected by the absence of an email on the user object returned from `paywall.getUser()`.
+
+```javascript
+try {
+  const userInfo = await paywall.getUser();
+
+  if (!userInfo.user.email) {
+    // anonymous user
+    showAnonymousBanner();
+  } else {
+    // full account
+    showProfile(userInfo.user.email);
+  }
+} catch (error) {
+  // 401 — not signed in at all
+  redirectToPaywall();
+}
+```
+
+## Anonymous User Response Shape
+
+Anonymous users come back from `paywall.getUser()` with the same overall structure as regular users — the only difference is `email: null` and a placeholder display name:
+
+```javascript
+{
+  user: {
+    id: "anonymous_user_123456789",
+    email: null,                  // <-- the marker
+    name: "Anonymous User",
+    avatar: "default_avatar_url",
+    created_at: "2024-01-15T10:30:45.000Z"
+  },
+  balances: [
+    { type: "standard", count: 10 },  // trial tokens deposited
+    { type: "advanced", count: 2 }
+  ]
+  // ... other fields identical to regular users
+}
+```
+
+Anonymous users can spend their trial balances via `paywall.makeRequest()` exactly like signed-up users — the gate is on `getUser()` returning `200`, not on `email`.
+
+## Triggering Anonymous Sign-in
+
+There is no programmatic method to create an anonymous user in SDK v2 — the “Continue without account” button is rendered by the hosted paywall modal. Call `paywall.open()` and the user picks the option themselves:
+
+```javascript
+paywall.open(); // modal shows "Continue without account" when allow_anonymous = true
+```
+
+After the user clicks it and passes CAPTCHA, the modal closes and the next `paywall.getUser()` call returns the new anonymous account.
+
+## Limitations Specific to SDK v2
+
+- **No upgrade API** — there is no `linkEmail()` or similar in SDK v2. If the user later signs in with Google on the same browser, the legacy backend creates a separate account; the anonymous one stays parallel. Token balances do not merge.
+- **Browser-bound** — clearing cookies / localStorage permanently disconnects the user from the anonymous account. No recovery flow.
+- **No purchase** — anonymous users cannot complete checkout. The modal forces a Google sign-in before reaching Stripe/Paddle.
+
+For account linking and resume-after-signout, you need SDK v3 — see [`AuthClient.signInAnonymously`](/docs-v2/sdk-v3/auth/anonymous).
+
+## See Also
+
+<Cards>
+  <Cards.Card title="Concept & dashboard toggle" href="/docs-v2/paywall/anonymous-sign-in" />
+  <Cards.Card title="Get User Data (full API)" href="/docs-v2/sdk-v2/client-side/get-user" />
+  <Cards.Card title="Open Paywall" href="/docs-v2/sdk-v2/client-side/open" />
+  <Cards.Card title="SDK v3 equivalent" href="/docs-v2/sdk-v3/auth/anonymous" />
+</Cards>

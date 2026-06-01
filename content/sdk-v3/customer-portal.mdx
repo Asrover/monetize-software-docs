@@ -1,0 +1,321 @@
+import { Callout, Cards, Steps, Table } from 'nextra/components';
+
+# Customer portal
+
+A dedicated UI for users to manage their subscriptions outside the paywall — list active purchases, cancel/renew, view invoices, update payment methods. SDK 3.0 provides the building blocks; you wire up your own React/Vue layout.
+
+<Callout type="info">
+  **Two layers.** The SDK exposes a typed customer-portal API on `BillingClient` (`listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`) and you build the screens. For Stripe/Paddle/Chargebee customers we also have an acquirer-hosted portal — open it via `getCustomerPortalUrl()` when you don't need a custom UI.
+</Callout>
+
+## API surface
+
+Every method below works with either a connected `AuthClient` (Bearer auth — natural for browser UI) or `apiKey` + `identity` (server-side, bring-your-own-auth). Without either path the SDK throws `identity_required` before the network call.
+
+```ts
+billing.listPurchases(opts?: { signal?: AbortSignal }): Promise<PaywallPurchaseDetailed[]>;
+billing.cancelSubscription(params: {
+  subscriptionId: string;
+  reason: string;
+  signal?: AbortSignal;
+}): Promise<{
+  subscription: {
+    status: string | null;
+    canceled_at: string | null;
+    cancel_at: string | null;
+    cancel_at_period_end: boolean | null;
+  };
+}>;
+billing.getCustomerPortalUrl(opts?: {
+  signal?: AbortSignal;
+  returnUrl?: string;
+}): Promise<{ url: string }>;
+```
+
+### `PaywallPurchaseDetailed`
+
+```ts
+interface PaywallPurchaseDetailed {
+  id: string;
+  status: string | null;
+  cancel_at: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  created: string;
+  ended_at: string | null;
+  current_period_end: string | null;
+  current_period_start: string | null;
+  /** Price in minor units (cents). Sometimes from
+   *  the base price (`* 100`); when geo-pricing applies, the local-currency amount. */
+  unit_amount: number;
+  currency: string;
+  interval: string | null;
+  /** Discount percent from the offer if applied; undefined when no offer. */
+  discount?: number;
+}
+```
+
+Richer shape than `PaywallUserPurchase` (the trimmed object that ships inside `bootstrap.user`). `listPurchases()` returns fresh state on each call — no edge caching — so cancel/renew UIs reflect the user's last action immediately.
+
+## Listing subscriptions
+
+```tsx
+import { useEffect, useState } from 'react';
+import type { PaywallPurchaseDetailed } from '@monetize.software/sdk';
+import { usePaywall } from '@monetize.software/sdk-react';
+
+function SubscriptionsList() {
+  const paywall = usePaywall();
+  const [purchases, setPurchases] = useState<PaywallPurchaseDetailed[] | null>(null);
+
+  useEffect(() => {
+    if (!paywall) return;
+    const ctrl = new AbortController();
+    paywall.billing
+      .listPurchases({ signal: ctrl.signal })
+      .then(setPurchases)
+      .catch((e) => {
+        if (e.code !== 'aborted') console.error(e);
+      });
+    return () => ctrl.abort();
+  }, [paywall]);
+
+  if (!purchases) return <Skeleton />;
+  if (purchases.length === 0) return <p>No active subscriptions.</p>;
+
+  return purchases.map((p) => (
+    <Card key={p.id}>
+      <header>
+        <strong>{(p.unit_amount / 100).toFixed(2)} {p.currency}</strong>
+        {p.interval && <span> / {p.interval}</span>}
+      </header>
+      <dl>
+        <dt>Status</dt>
+        <dd>{p.status}</dd>
+        <dt>Renews</dt>
+        <dd>{p.current_period_end ?? '—'}</dd>
+        {p.cancel_at && (
+          <>
+            <dt>Cancels at</dt>
+            <dd>{p.cancel_at}</dd>
+          </>
+        )}
+      </dl>
+    </Card>
+  ));
+}
+```
+
+`listPurchases()` returns guest = empty list. For a "sign in to see your subscriptions" gate, check `paywall.auth?.getCachedSession()` first.
+
+## Cancellation flow
+
+```ts
+const result = await paywall.billing.cancelSubscription({
+  subscriptionId: '<id>',
+  reason: 'too_expensive' // mandatory — collect via a select in your UI
+});
+console.log(result.subscription.cancel_at_period_end); // true on a "soft" cancel
+```
+
+`reason` is validated on the backend — common values mirror the legacy customer portal: `too_expensive`, `not_using`, `missing_features`, `found_alternative`, `temporary_pause`, `other`. Specifics depend on the acquirer.
+
+By default the cancel happens at the end of the current period — the user keeps access until `current_period_end`. Refresh the list after success:
+
+```tsx
+async function handleCancel(subscriptionId: string, reason: string) {
+  setBusy(true);
+  try {
+    await paywall.billing.cancelSubscription({ subscriptionId, reason });
+    // Refetch so the UI shows the new cancel_at / cancel_at_period_end.
+    const next = await paywall.billing.listPurchases();
+    setPurchases(next);
+  } finally {
+    setBusy(false);
+  }
+}
+```
+
+<Callout type="warning">
+  Make the user confirm before calling `cancelSubscription`. The SDK does not double-check — it forwards the call straight to the acquirer.
+</Callout>
+
+## Renew / Upgrade
+
+To upgrade a plan or restart a cancelled subscription — open the paywall in renewal mode:
+
+```ts
+paywall.open({ renew: true });
+```
+
+This skips the `has_active_subscription` check (otherwise the user would land in the restored success view) and passes `ignoreActivePurchase: true` to `/start-checkout`. The acquirer creates a new subscription; the old one cancels at period end.
+
+In a React app:
+
+```tsx
+import { PaywallButton } from '@monetize.software/sdk-react';
+
+<PaywallButton renew>Renew subscription</PaywallButton>
+```
+
+## Hosted portal (Stripe / Paddle / Chargebee)
+
+For an acquirer-hosted portal (invoices, payment methods, billing history) — open the URL from `getCustomerPortalUrl()`:
+
+```ts
+const { url } = await paywall.billing.getCustomerPortalUrl({
+  returnUrl: `${window.location.origin}/account`
+});
+window.open(url, '_blank');
+```
+
+The backend uses the Bearer (or server-side `apiKey`) to figure out which acquirer to query and returns a one-time login URL.
+
+### `returnUrl`
+
+The URL Stripe / Paddle / Chargebee will send the user back to when they hit the "Return to ..." button inside the hosted portal. Pass your app's account page — `${window.location.origin}/account` — so the user lands back in your UI, not on the underlying online-service domain.
+
+Without an explicit `returnUrl` the backend falls back in this order:
+
+1. `paywall_settings.shop_url` — the paywall-level default ("Shop URL" in the dashboard).
+2. The paywall's `custom_domain` (`https://<your-custom-domain>/paywall/<id>/customer-portal/return`).
+3. The bare online-service origin (a placeholder page useful only for the legacy v2 iframe flow).
+
+For self-hosted apps, **set `returnUrl` explicitly** — otherwise users round-trip through the online service's domain after every portal session, which feels off-brand and exposes implementation details.
+
+<Callout type="info">
+  **Freemius doesn't have a hosted portal** — `getCustomerPortalUrl()` throws `PaywallError('forbidden', { status: 403 })` for Freemius subscriptions. For Freemius users, build cancel/renew UI from `listPurchases()` + `cancelSubscription()` directly.
+</Callout>
+
+## Support ticket
+
+The same screen often needs a "Contact support" button. Either use the SDK modal:
+
+```tsx
+import { PaywallSupportButton } from '@monetize.software/sdk-react';
+
+<PaywallSupportButton>Need help?</PaywallSupportButton>
+```
+
+Or drive your own form and POST through SDK:
+
+```ts
+const { ticket } = await paywall.billing.createSupportTicket({
+  subject: 'Refund request',
+  content: 'Hi, I would like to cancel and request a refund...',
+  // optional — overrides identity.email; Bearer auth ignores this and uses session email
+  email: user.email,
+  files: [pdfFile] // optional — switches to multipart/form-data
+});
+
+console.log(ticket.id, ticket.status); // numeric ID + 'open' / 'closed'
+```
+
+With Bearer auth, the backend ignores any `email` you pass and uses the session email (anti-spoofing). Without auth, `email` must be supplied — either in the payload or via `identity.email`, otherwise the backend rejects with `email_required`.
+
+## Putting it together — full portal page
+
+```tsx
+import { useState } from 'react';
+import {
+  PaywallProvider,
+  PaywallButton,
+  PaywallSupportButton,
+  usePaywall,
+  usePaywallUser
+} from '@monetize.software/sdk-react';
+
+function CustomerPortalContent() {
+  const paywall = usePaywall();
+  const account = usePaywallUser();
+  const [purchases, setPurchases] = useState(null);
+
+  // ... fetch via listPurchases, render cards, hook cancel/renew CTAs
+
+  if (account.status === 'loading') return <Skeleton />;
+  if (account.status === 'guest') return <SignInPrompt />;
+  if (!account.user) return <Skeleton />;
+
+  return (
+    <main>
+      <h1>Your subscription</h1>
+      <SubscriptionsList />
+
+      <section>
+        <h2>Billing</h2>
+        <button
+          onClick={async () => {
+            const { url } = await paywall.billing.getCustomerPortalUrl({
+              returnUrl: `${window.location.origin}/account`
+            });
+            window.open(url, '_blank');
+          }}
+        >
+          Manage billing on Stripe
+        </button>
+        <PaywallButton renew>Renew / Upgrade plan</PaywallButton>
+      </section>
+
+      <footer>
+        <PaywallSupportButton>Need help?</PaywallSupportButton>
+      </footer>
+    </main>
+  );
+}
+
+export default function CustomerPortalPage() {
+  return (
+    <PaywallProvider options={{ paywallId: 'pw_123', apiOrigin: 'https://pay.your-domain.com', auth: true }}>
+      <CustomerPortalContent />
+    </PaywallProvider>
+  );
+}
+```
+
+## Error handling
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Code</Table.Th>
+      <Table.Th>Source</Table.Th>
+      <Table.Th>What to do</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`identity_required`</Table.Td>
+      <Table.Td>`listPurchases`, `cancelSubscription` without either an `AuthClient` or `apiKey` + `identity`</Table.Td>
+      <Table.Td>Browser: enable `auth: true`. Server: pass `apiKey` and call `billing.setIdentity({ email, userId })` first.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity_not_on_paywall`</Table.Td>
+      <Table.Td>`listPurchases`, `cancelSubscription` (apiKey path) for an identity not linked to this paywall</Table.Td>
+      <Table.Td>Verify the email/userId you pass; owner can only act on users that have ever interacted with the paywall.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`identity_required`</Table.Td>
+      <Table.Td>`getCustomerPortalUrl` without auth, apiKey, or identity</Table.Td>
+      <Table.Td>Same — `auth: true` or pass `identity.email`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`forbidden` (`status: 403`)</Table.Td>
+      <Table.Td>`getCustomerPortalUrl` for an acquirer without a hosted portal (e.g. Freemius) or with no active subscription.</Table.Td>
+      <Table.Td>Show "no subscription to manage" or build your own cancel/renew UI.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`aborted`</Table.Td>
+      <Table.Td>User navigated away during the request.</Table.Td>
+      <Table.Td>Ignore — not an error.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## See also
+
+<Cards>
+  <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="API reference for listPurchases / cancelSubscription / getCustomerPortalUrl / createSupportTicket" />
+  <Cards.Card title="React bindings" href="/docs-v2/sdk-v3/react" description="PaywallButton with renew, PaywallSupportButton, usePaywallUser hook" />
+  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="Driving customer portal flows from your backend with apiKey + per-user Bearer" />
+  <Cards.Card title="Error codes" href="/docs-v2/sdk-v3/errors" description="auth_required / identity_required / forbidden details" />
+</Cards>

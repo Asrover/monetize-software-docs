@@ -1,0 +1,254 @@
+import { Callout, Steps, Tabs, Table } from 'nextra/components';
+
+# Email OTP
+
+Passwordless sign-in: the user enters an email, receives a 6-digit code, types it in — `AuthSession` is ready. The same flow covers signin and signup: if the user doesn't exist yet they're created automatically.
+
+```ts
+await auth.sendOtp({ email: 'user@example.com' });
+// ... show the code input UI
+const session = await auth.verifyOtp({
+  email: 'user@example.com',
+  token: '123456'
+});
+```
+
+<Callout type="info">
+  **When to pick OTP over password.** In Chrome extensions, password managers often misbehave (autofill breaks because of isolation). OTP minimises friction: one email and the user is in. Downside — every sign-in requires opening the inbox; on the web, where password managers work well, a classic password may be more convenient.
+</Callout>
+
+## sendOtp
+
+Sends a code to the email. The backend always returns `ok` (anti-enumeration: you can't tell from the response whether the user exists). A real error ("invalid email") surfaces only on the next step — `verifyOtp`.
+
+<Tabs items={['Signature', 'Parameters', 'Returns']}>
+  <Tabs.Tab>
+    ```ts
+    auth.sendOtp(input: {
+      email: string;
+      createUser?: boolean;
+      userMeta?: Record<string, unknown>;
+    }): Promise<void>
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    <Table>
+      <thead>
+        <Table.Tr>
+          <Table.Th>Field</Table.Th>
+          <Table.Th>Default</Table.Th>
+          <Table.Th>What it does</Table.Th>
+        </Table.Tr>
+      </thead>
+      <tbody>
+        <Table.Tr>
+          <Table.Td>`email`</Table.Td>
+          <Table.Td>—</Table.Td>
+          <Table.Td>User's email. No format validation on the client — the platform's auth backend handles it.</Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td>`createUser`</Table.Td>
+          <Table.Td>`true`</Table.Td>
+          <Table.Td>If `false` and the user doesn't exist — the code isn't sent (but the response is still `ok`). Use `false` for "sign-in only" flows.</Table.Td>
+        </Table.Tr>
+        <Table.Td>`userMeta`</Table.Td>
+        <Table.Td>—</Table.Td>
+        <Table.Td>Stored as user metadata on the new account; ignored for existing users.</Table.Td>
+      </tbody>
+    </Table>
+  </Tabs.Tab>
+  <Tabs.Tab>
+    `Promise<void>` — success means "the backend accepted the request", not "the email was delivered". Mirrors the anti-enumeration logic on the SDK side.
+  </Tabs.Tab>
+</Tabs>
+
+### sendOtp errors
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Situation</Table.Th>
+      <Table.Th>`code` / `status`</Table.Th>
+      <Table.Th>What to show the user</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Email doesn't look like an email</Table.Td>
+      <Table.Td>`invalid_email` / 400</Table.Td>
+      <Table.Td>"Check your email"</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Too many sends (rate limit)</Table.Td>
+      <Table.Td>`over_email_send_rate_limit` / 429</Table.Td>
+      <Table.Td>"Try again in a minute"</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Network is down</Table.Td>
+      <Table.Td>`network_error`</Table.Td>
+      <Table.Td>"Send again" button</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## verifyOtp
+
+Verifies the code, sets the session on success and emits `onAuthChange`. Event-wise: `SIGNED_IN` for `type='email'|'signup'|'magiclink'|'invite'`; `PASSWORD_RECOVERY` for `type='recovery'` — so listeners can tell "user signed in" from "user opened the reset link, show the new-password form".
+
+```ts
+auth.verifyOtp(input: {
+  email: string;
+  token: string;
+  type?: 'email' | 'recovery' | 'signup' | 'magiclink' | 'invite';
+  userMeta?: Record<string, string>;
+}): Promise<AuthSession>
+```
+
+### The `type` parameter
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>`type`</Table.Th>
+      <Table.Th>When to use</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`'email'` (default)</Table.Td>
+      <Table.Td>Standard OTP flow: signin/signup via `sendOtp`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'recovery'`</Table.Td>
+      <Table.Td>After [`requestPasswordReset`](/docs-v2/sdk-v3/auth/password-reset) — yields a recovery session so you can call `updatePassword`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'signup'`</Table.Td>
+      <Table.Td>After `signUp` with email confirmation enabled on the platform. Use when you want to flag "registration confirmation" separately.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'magiclink'`</Table.Td>
+      <Table.Td>If you send a magic link instead of an OTP code — extract the token from the link URL.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`'invite'`</Table.Td>
+      <Table.Td>Accepting an invite — rarely used, kept for compatibility.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+### verifyOtp errors
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Situation</Table.Th>
+      <Table.Th>`code` / `status`</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Wrong code, expired code, or email without an OTP sent</Table.Td>
+      <Table.Td>`invalid_otp` / 401</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Nonexistent `type` (typo)</Table.Td>
+      <Table.Td>`invalid_type` / 400</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="warning">
+  **OTP TTL.** 1 hour by default (configured platform-side). If your UI mentions the code lifetime ("code valid for X minutes"), use a generic phrasing rather than hard-coding the value.
+</Callout>
+
+## Full flow
+
+<Steps>
+
+### Step 1: request a code
+
+```ts
+await auth.sendOtp({ email });
+showCodeInputScreen({ email });
+```
+
+### Step 2: show the code input
+
+The UI should:
+- store the email from step 1 (the user shouldn't have to re-enter it),
+- offer a "Resend" button with a 30-60 second delay (anti-spam),
+- auto-focus the input.
+
+### Step 3: verify the code
+
+```ts
+try {
+  const session = await auth.verifyOtp({ email, token: code });
+  // ✅ user signed in
+  onLoggedIn(session);
+} catch (e) {
+  if (e instanceof PaywallError && e.code === 'invalid_otp') {
+    showError('Wrong or expired code');
+    return;
+  }
+  throw e;
+}
+```
+
+### Step 4: business as usual
+
+`AuthClient` now holds the session and emits `onAuthChange`; `BillingClient` picks up the token.
+
+</Steps>
+
+## Resend timer: example
+
+```tsx
+function OtpScreen({ email, onLoggedIn }) {
+  const [code, setCode] = useState('');
+  const [resendIn, setResendIn] = useState(45);
+
+  useEffect(() => {
+    if (resendIn === 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const submit = async () => {
+    try {
+      const session = await auth.verifyOtp({ email, token: code });
+      onLoggedIn(session);
+    } catch (e) {
+      // show error
+    }
+  };
+
+  const resend = async () => {
+    await auth.sendOtp({ email });
+    setResendIn(45);
+  };
+
+  return (
+    <div>
+      <input value={code} onChange={(e) => setCode(e.target.value)} />
+      <button onClick={submit}>Verify</button>
+      <button onClick={resend} disabled={resendIn > 0}>
+        {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Anti-enumeration: things to watch for
+
+The backend always returns `ok` for `sendOtp` — even when the user doesn't exist. This is by design: you can't tell from the response whether the email is registered. Consequence for UI:
+
+- **Don't show "no such user"** between `sendOtp` and `verifyOtp` — you don't have that info until the code is entered.
+- **Error messages should be neutral.** "Wrong code" works both for "no code because user doesn't exist" and for "code expired / mistyped".
+
+## Next steps
+
+- [Password reset](/docs-v2/sdk-v3/auth/password-reset) — reuses `verifyOtp` with `type: 'recovery'`.
+- [Session management](/docs-v2/sdk-v3/auth/session) — what to do after a successful `verifyOtp`.

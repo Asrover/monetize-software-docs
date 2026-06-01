@@ -1,0 +1,349 @@
+import { Callout, Tabs, Table } from 'nextra/components';
+
+# Session management
+
+After a successful sign-in (by any method — email, OTP, OAuth, anonymous), `AuthClient` stores `AuthSession` locally and refreshes the access token on a timer. This page covers how to read state, react to changes, sign out, and integrate the session into code outside `BillingClient`.
+
+## AuthSession
+
+```ts
+interface AuthSession {
+  access_token: string;
+  refresh_token: string;
+  /** Absolute timestamp in ms (Date.now()-comparable). */
+  expires_at: number;
+  user: {
+    id: string;
+    /** null for anonymous users (signInAnonymously). */
+    email: string | null;
+    country?: string | null;
+    is_anonymous?: boolean;
+  };
+}
+```
+
+Default access token lifetime is 1 hour, refresh token — 30 days of inactivity (configured platform-side). The SDK abstracts this away: `getAccessToken()` refreshes when expiry is within 60s.
+
+## Reading state
+
+<Tabs items={['Sync — getCachedSession', 'Async — getAccessToken', 'Promise — ready']}>
+  <Tabs.Tab>
+    Snapshot with no network or await. Returns the current session or `null`.
+
+    ```ts
+    const session = auth.getCachedSession();
+    const user = auth.getCachedUser(); // shortcut: session?.user
+    ```
+
+    **When to use:** for conditional UI ("Sign in" vs "Profile"). Don't use for backend requests — that needs `getAccessToken()`, which can refresh.
+
+    <Callout type="warning">
+      Until `await auth.ready()` the method may return `null` even when a session is in storage. Hydration is async (especially `chrome.storage.local`), and the SDK doesn't block the constructor.
+    </Callout>
+  </Tabs.Tab>
+  <Tabs.Tab>
+    Returns the access token, lazy-refreshes when expiry is near. `null` means signed out or refresh hit a 401.
+
+    ```ts
+    const token = await auth.getAccessToken();
+    if (!token) {
+      redirectToLogin();
+      return;
+    }
+    const res = await fetch('/my-api', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    ```
+
+    **When to use:** before every backend request. Don't cache the result for more than a few seconds — the SDK caches the session itself, repeat calls are cheap.
+  </Tabs.Tab>
+  <Tabs.Tab>
+    Resolves after the session has hydrated from storage. Use on app startup to avoid a "logged out" flash for a fraction of a second.
+
+    ```ts
+    const auth = new AuthClient({ paywallId: 'pw_123' });
+    await auth.ready();
+    if (auth.getCachedUser()) renderApp();
+    else renderLogin();
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Listening for changes
+
+`onAuthChange` fires on every session change. The listener receives two arguments: a discriminated `event` and the `session` (or `null`).
+
+```ts
+type AuthChangeEvent =
+  | 'INITIAL_SESSION'
+  | 'SIGNED_IN'
+  | 'SIGNED_OUT'
+  | 'TOKEN_REFRESHED'
+  | 'USER_UPDATED'
+  | 'PASSWORD_RECOVERY';
+
+const unsubscribe = auth.onAuthChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    console.log('logged in as', session?.user.email);
+    showAppShell();
+  } else if (event === 'SIGNED_OUT') {
+    showLoginScreen();
+  }
+});
+
+// on component unmount:
+unsubscribe();
+```
+
+### Which event fires for what
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Event</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`INITIAL_SESSION`</Table.Td>
+      <Table.Td>Always the first callback for a new subscription — after hydration from storage. `session` may be `null` (not signed in) or a restored session.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`SIGNED_IN`</Table.Td>
+      <Table.Td>`signInWithEmail`, `signUp` (signed_in), `verifyOtp` (type ≠ recovery), `signInWithOAuth`, `signInAnonymously`, cross-context login.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`SIGNED_OUT`</Table.Td>
+      <Table.Td>`signOut`, `revokeAllSessions`, `refresh` returned 401, removal from another context.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`TOKEN_REFRESHED`</Table.Td>
+      <Table.Td>`refresh()` updated the tokens, same `user.id`. Cross-context rotation.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`USER_UPDATED`</Table.Td>
+      <Table.Td>`upgradeAnonymousToEmail` — same `user.id`, updated `email`/`is_anonymous`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`PASSWORD_RECOVERY`</Table.Td>
+      <Table.Td>`verifyOtp({ type: 'recovery' })` — short-lived session for `updatePassword`. UI should show "set new password", not the regular signed-in flow.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  **Initial snapshot.** Every subscriber gets a first callback with `event = 'INITIAL_SESSION'` via a microtask after hydration resolves, **even if there's no session yet** (callback receives `null`). All subsequent callbacks are real transitions.
+
+  That lets you safely side-effect on `event === 'SIGNED_IN'` (e.g. force-refetch) without confusing it with the page-reload restore.
+</Callout>
+
+## signOut
+
+Clears local state IMMEDIATELY — no waiting for the network. Then best-effort POST to the server to revoke the refresh token.
+
+```ts
+await auth.signOut();
+// auth.getCachedSession() === null
+// onAuthChange fired with event='SIGNED_OUT', session=null
+// storage cleared
+```
+
+<Callout type="info">
+  **Never throws.** Even on server 5xx or a dead network, local logout has already happened. Safe to call inside `try/finally` without your own error handler.
+</Callout>
+
+### Logout button
+
+```tsx
+function LogoutButton() {
+  return <button onClick={() => auth.signOut()}>Sign out</button>;
+}
+```
+
+No `await` needed — the UI updates via `onAuthChange` without waiting for the network round-trip.
+
+## refresh
+
+You usually **don't call this manually** — `getAccessToken` refreshes itself. The method is useful for rare cases:
+
+- **Force a refresh after a backend operation that changed claims.** E.g. the user upgraded to admin and you want new roles in the access token immediately, not in an hour.
+- **Tests.** A forced refresh simplifies endpoint unit tests.
+
+```ts
+auth.refresh(): Promise<AuthSession | null>
+```
+
+Returns the new session or `null` if refresh got a 401 (refresh token revoked). A network error / 5xx — propagates; the session stays; we don't sign the user out for transient issues.
+
+### Deduplication
+
+Parallel `getAccessToken()` + `refresh()` calls on the same `AuthClient` share **one** inflight request. Important if you fire several API calls in parallel near expiry:
+
+```ts
+// One refresh request for all three, not three parallel.
+const [users, prices, offers] = await Promise.all([
+  fetchUsers(),
+  fetchPrices(),
+  fetchOffers()
+]);
+```
+
+## getAccessToken: scenarios
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>State</Table.Th>
+      <Table.Th>Behaviour</Table.Th>
+      <Table.Th>Returns</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>No session</Table.Td>
+      <Table.Td>No network</Table.Td>
+      <Table.Td>`null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Session present, &gt;60s to expiry</Table.Td>
+      <Table.Td>No network — returns the current token</Table.Td>
+      <Table.Td>`access_token`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Session present, &lt;60s to expiry</Table.Td>
+      <Table.Td>Lazy refresh on the server</Table.Td>
+      <Table.Td>new `access_token`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Refresh got 401</Table.Td>
+      <Table.Td>Clears the session, emits logout</Table.Td>
+      <Table.Td>`null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Refresh got a network/5xx error</Table.Td>
+      <Table.Td>Returns the current token (still valid)</Table.Td>
+      <Table.Td>old `access_token`</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Usage without BillingClient
+
+If you use SDK 3.0 only for `AuthClient` (e.g. your own UI, not our `PaywallUI`) — everything works standalone. Just attach the token to your requests:
+
+```ts
+import { AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({ paywallId: 'pw_123' });
+await auth.ready();
+
+async function callMyApi(path: string) {
+  const token = await auth.getAccessToken();
+  const res = await fetch(`https://api.myapp.com${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  if (res.status === 401) {
+    // The token could have been revoked between getAccessToken and the request — try refresh and retry
+    const fresh = await auth.refresh();
+    if (!fresh) {
+      redirectToLogin();
+      return;
+    }
+    return callMyApi(path);
+  }
+  return res.json();
+}
+```
+
+## Persistence
+
+The session is stored under the key `pw-<paywallId>-auth-v1` in `StorageAdapter`. By default the SDK picks:
+
+- **Chrome Extension** — `chrome.storage.local` (visible across all extension contexts).
+- **Web** — `window.localStorage`.
+- **Otherwise** (Node.js, tests) — in-memory map.
+
+You can pass your own adapter — e.g. for encrypted storage or sessionStorage:
+
+```ts
+import { AuthClient, type StorageAdapter } from '@monetize.software/sdk/core';
+
+const sessionStorageAdapter: StorageAdapter = {
+  async getItem(k) { return window.sessionStorage.getItem(k); },
+  async setItem(k, v) { window.sessionStorage.setItem(k, v); },
+  async removeItem(k) { window.sessionStorage.removeItem(k); }
+};
+
+const auth = new AuthClient({
+  paywallId: 'pw_123',
+  storage: sessionStorageAdapter
+});
+```
+
+<Callout type="warning">
+  Replacing `storage` means the session **won't survive a reload** (with sessionStorage). Acceptable trade-off for private cases, but don't do it by default — frequent re-logins annoy users.
+</Callout>
+
+## Cross-context sync (multi-tab + Chrome Extension)
+
+`AuthClient` listens for changes on the session key from other contexts and syncs state automatically — no manual reload or `chrome.storage.onChanged` plumbing required.
+
+- **Web (multi-tab):** native `storage` event — sign in on one tab, others emit `onAuthChange` instantly with the new session, `getCachedSession` returns it, `getAccessToken` yields the fresh Bearer. Logout (another context called `signOut()`) also propagates — the current context signs out without a reload.
+- **Chrome Extension:** via `chrome.storage.onChanged`. One login in the popup → background, content script (with `storage` permission), and the options page all receive `onAuthChange` at once.
+
+```ts
+// popup.tsx
+const auth = new AuthClient({ paywallId: 'pw_123' });
+const paywall = new PaywallUI({ paywallId: 'pw_123', auth });
+paywall.openAuth(); // user signs in — token lands in chrome.storage.local
+```
+
+```ts
+// background.ts
+import { AuthClient, BillingClient } from '@monetize.software/sdk/core';
+const auth = new AuthClient({ paywallId: 'pw_123' });
+auth.onAuthChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    // Fires right after popup signIn
+  }
+});
+const billing = new BillingClient({ paywallId: 'pw_123', auth });
+const gateway = billing.createApiGatewayClient();
+// gateway.call() will use the same Bearer the popup signed in with.
+```
+
+### Custom StorageAdapter
+
+Replacing `storage` is supported, but if your adapter is custom — implement `watch?(key, cb)`, otherwise cross-context sync won't work (the memory fallback and custom adapters without `watch` are still OK, just no live updates):
+
+```ts
+const myStorage: StorageAdapter = {
+  async getItem(k) { /* ... */ },
+  async setItem(k, v) { /* ... */ },
+  async removeItem(k) { /* ... */ },
+  watch(key, cb) {
+    // return unsubscribe; cb(null) on removal, cb(string) on update
+    const unsub = mySource.on(key, cb);
+    return unsub;
+  }
+};
+```
+
+### Teardown
+
+On hot reload, tests or explicit reinitialization — call `destroy()`. Otherwise storage listeners outlive the instance:
+
+```ts
+auth.destroy(); // unsubscribes storage.watch, clears onAuthChange listeners
+```
+
+<Callout type="info">
+  In a **content script**, Bearer works the same way if the manifest has `storage` permission. To isolate the token from the content script (page is untrusted) — have the content script talk to background via `chrome.runtime.sendMessage` and let only the background do Bearer-authenticated fetches.
+</Callout>
+
+## Next steps
+
+- [Error codes](/docs-v2/sdk-v3/errors) — list of `PaywallError.code` for every auth method.
+- [BillingClient](/docs-v2/sdk-v3/bootstrap) — how `AuthClient` integrates with billing automatically.
+- [Storage adapters](/docs-v2/sdk-v3/storage) — `StorageAdapter` details and built-in implementations.

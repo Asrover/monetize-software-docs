@@ -1,0 +1,76 @@
+import { Callout, Cards, Table } from 'nextra/components';
+
+# Browser — custom UI
+
+You want our auth and billing infrastructure (so trials, checkout, customer portal, sessions all "just work") — but you render your **own** pricing page, login form, and gate components. The SDK gives you `BillingClient` for prices/checkout/state and `AuthClient` for login flows; you control every pixel of the UI.
+
+```ts
+import { BillingClient, AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN'
+});
+
+const billing = new BillingClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth
+});
+
+// Render your own pricing cards
+const prices = await billing.getPrices();
+// ... your JSX / your DOM ...
+
+// Your "Buy" button:
+async function onBuyClick(priceId) {
+  if (!auth.user) {
+    await auth.signInWithEmail({ email, password });
+  }
+  const { url } = await billing.createCheckout({ priceId, idempotencyKey: crypto.randomUUID() });
+  window.location.assign(url);
+}
+```
+
+## When to pick this
+
+- You already have a strong design system and don't want to fit our paywall modal into it.
+- You want your pricing page indexed for SEO (not hidden inside a modal).
+- You need login UX that matches the rest of your app (your own copy, layout, A/B tests).
+- You want full control over trial UX, upsell timing, customer-portal layout.
+- You're selling per-request AI access from the browser without a backend ([API Gateway](/docs-v2/sdk-v3/api-gateway) — only fits this path).
+
+## Form factors
+
+This scenario works the same way in any browser context:
+
+- **Web / SPA** — just `import { BillingClient } from '@monetize.software/sdk/core'` and go.
+- **Chrome Extension (MV3)** — use the `/core` export in your popup, options page, or content script. Skip `@monetize.software/sdk-extension` (which is built around `PaywallUI` for the drop-in scenario) — your popup renders its own UI directly.
+- **Telegram Mini App** — same as SPA. Watch bundle size; import narrowly from `/core`.
+
+## What's in this path
+
+<Cards>
+  <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="bootstrap, prices, checkout, customer portal, identity" />
+  <Cards.Card title="Authentication" href="/docs-v2/sdk-v3/auth" description="AuthClient: email & password, OTP, OAuth, anonymous, session refresh" />
+  <Cards.Card title="API Gateway" href="/docs-v2/sdk-v3/api-gateway" description="Metered AI calls from the browser (provider keys held on our server)" />
+</Cards>
+
+<Callout type="info">
+  **Using React?** [React bindings](/docs-v2/sdk-v3/react) work here too. The hooks (`usePaywallPrices`, `usePaywallUser`, `usePaywallAccess`) read `BillingClient` state directly — power your custom pricing cards, gates, and dashboards without managing subscriptions yourself. You don't have to use `<PaywallButton>` / the modal if you don't want to.
+</Callout>
+
+## What's next
+
+Cross-cutting features useful in this scenario:
+
+<Cards>
+  <Cards.Card title="Trial" href="/docs-v2/sdk-v3/trial" description="getAccess() for feature gating, trial state in your own UI" />
+  <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Build your own My Subscriptions UI with listPurchases / cancelSubscription" />
+  <Cards.Card title="Events" href="/docs-v2/sdk-v3/events" description="onBootstrapChange, onUserChange, onAuthChange — power your reactive UI" />
+  <Cards.Card title="Storage adapters" href="/docs-v2/sdk-v3/storage" description="Where the SDK persists state — defaults work, override for special cases" />
+</Cards>
+
+<Callout type="info">
+  **Don't want to use our auth at all?** If your app already has its own login system and you just need server-side checkout / state sync, switch to [Headless / server-side](/docs-v2/sdk-v3/headless-server) — `apiKey` + `identity` flow lets you skip our `AuthClient` entirely.
+</Callout>

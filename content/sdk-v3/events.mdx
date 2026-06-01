@@ -1,0 +1,367 @@
+import { Callout, Table, Tabs } from 'nextra/components';
+
+# Events
+
+`PaywallUI` is a typed event emitter. Subscribe via `paywall.on(event, handler)` — the handler receives a strictly typed payload, IDE gives you autocomplete. Every `on()` returns an unsubscribe function.
+
+```ts
+const off = paywall.on('purchase_completed', ({ priceId, sessionId, restored }) => {
+  if (restored) return; // user came back with an existing subscription, not a new purchase
+  unlockFeature();
+});
+
+off(); // unsubscribe
+```
+
+<Callout type="info">
+  **Events vs state.** Events are good for one-shot side-effects (confetti, redirect, slack-ping). For rendering, use the [PaywallUI state machine](/docs-v2/sdk-v3/ui#state-machine) — it pairs naturally with `useSyncExternalStore`.
+</Callout>
+
+## Lifecycle of a single `open()`
+
+A typical successful "open → purchase" flow:
+
+```
+open → ready → price_selected → checkout_started → purchase_completed → close
+```
+
+Edge paths:
+
+- User closes the modal: `open → ready → close`.
+- Trial is still active: `trial_blocked` (modal **does not open** — separate event).
+- Targeting did not match: `visibility_blocked` (modal **does not open**).
+- Bootstrap failed: `open → error → close`.
+
+## Full event table
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Event</Table.Th>
+      <Table.Th>Payload</Table.Th>
+      <Table.Th>When</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`open`</Table.Td>
+      <Table.Td>`void`</Table.Td>
+      <Table.Td>Modal mounted. If bootstrap was not cached, `ready` fires after the data lands.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`ready`</Table.Td>
+      <Table.Td>`PaywallBootstrap`</Table.Td>
+      <Table.Td>Bootstrap loaded, modal shows content. A good place for impression metrics.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`price_selected`</Table.Td>
+      <Table.Td>`{ priceId: string; price: PaywallPrice }`</Table.Td>
+      <Table.Td>User clicked a plan but has not pressed "Pay" yet. Useful for selection analytics, not for conversion.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`checkout_started`</Table.Td>
+      <Table.Td>`{ priceId: string; url: string; acquiring?: Acquiring }`</Table.Td>
+      <Table.Td>The `checkout_url` from the backend was received and opened in a new tab. `acquiring` is one of `'stripe' | 'paddle' | 'chargebee' | 'overpay' | 'freemius'`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`purchase_completed`</Table.Td>
+      <Table.Td>`{ priceId: string \| null; sessionId: string \| null; restored?: boolean }`</Table.Td>
+      <Table.Td>User came back with a successful payment (URL marker) **or** the SDK watcher detected `has_active_subscription=true`. `restored=true` means an active subscription was discovered, not a fresh purchase (good for metrics).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`purchase_failed`</Table.Td>
+      <Table.Td>`{ reason: string \| null }`</Table.Td>
+      <Table.Td>User came back with an error/cancel from the provider. `reason: 'failed' | 'cancelled'`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`userChange`</Table.Td>
+      <Table.Td>`PaywallUser`</Table.Td>
+      <Table.Td>User-state changed: bootstrap snapshot, `getUser()` refresh, watcher tick. The first callback can arrive right after the constructor if there is a persisted user.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`authChange`</Table.Td>
+      <Table.Td>`{ event: AuthChangeEvent; session: AuthSession \| null }`</Table.Td>
+      <Table.Td>Fires only with `auth: true` (managed-auth). See [AuthChangeEvent](/docs-v2/sdk-v3/auth/session#listening-for-changes).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`trial_blocked`</Table.Td>
+      <Table.Td>`TrialStatus`</Table.Td>
+      <Table.Td>Trial is active — the modal **did not open** and the user gets through to the feature.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`trial_expired`</Table.Td>
+      <Table.Td>`void`</Table.Td>
+      <Table.Td>Trial just expired and the modal is shown for the first time after expiry. Emitted once per `PaywallUI` instance lifetime.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`visibility_blocked`</Table.Td>
+      <Table.Td>`VisibilityStatus`</Table.Td>
+      <Table.Td>Targeting did not match (country / device / visibility flag) — modal **did not open**.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`error`</Table.Td>
+      <Table.Td>`PaywallError`</Table.Td>
+      <Table.Td>Bootstrap or checkout failed. Does not cover `purchase_failed` — payment cancel/decline has its own event.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`close`</Table.Td>
+      <Table.Td>`void`</Table.Td>
+      <Table.Td>Modal closed — × button, ESC, overlay click, `paywall.close()`, or after a successful purchase + Continue.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Payload types
+
+### `PaywallBootstrap`
+
+```ts
+interface PaywallBootstrap {
+  settings: PaywallSettings;
+  prices: PaywallPrice[];
+  offers: PaywallOffer[];
+  layout?: Layout;
+  user?: PaywallUser;
+  locales?: Record<string, LocaleOverrides>;
+  /** Stable content-hash of the structural part (excluding user). Used with
+   *  `?if_version=` on revalidation. May be undefined on old backends. */
+  version?: string;
+}
+```
+
+See [BillingClient → Bootstrap](/docs-v2/sdk-v3/bootstrap) for format details.
+
+### `PaywallUser`
+
+```ts
+interface PaywallUser {
+  /** The main flag for most integrations. true if the user has an active
+   *  subscription OR a paid lifetime purchase OR an active trial. */
+  has_active_subscription: boolean;
+  purchases: PaywallUserPurchase[];
+  trial: { started_at: string | null; expires_at: string | null } | null;
+  /** Whether the user ever had a trial on this paywall (including expired
+   *  and cancelled). Anti-abuse flag for UI. */
+  had_previous_trial: boolean;
+}
+
+interface PaywallUserPurchase {
+  id: string;
+  status: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
+}
+```
+
+### `TrialStatus`
+
+```ts
+type TrialStatus =
+  | { mode: 'none'; blocked: false }
+  | {
+      mode: 'time';
+      blocked: boolean;
+      startedAt: number | null;    // Unix ms of the first open()
+      expiresAt: number | null;    // Unix ms of expiry
+      remainingMs: number;         // 0 — expired
+      totalMs: number;             // payload hours × 3_600_000
+    }
+  | {
+      mode: 'opens';
+      blocked: boolean;
+      remainingActions: number;    // 0 — expired
+      totalActions: number;
+    };
+```
+
+Discriminate by `status.mode`:
+
+```ts
+paywall.on('trial_blocked', (status) => {
+  if (status.mode === 'time') {
+    const minutes = Math.ceil(status.remainingMs / 60_000);
+    showBanner(`${minutes} min of trial left`);
+  } else if (status.mode === 'opens') {
+    showBanner(`${status.remainingActions} free actions left`);
+  }
+});
+```
+
+### `VisibilityStatus`
+
+```ts
+interface VisibilityStatus {
+  visible: boolean;
+  /** Why `visible=false`. null when `visible=true`. */
+  reason: 'country_not_match' | 'device_not_match' | 'disabled' | null;
+  /** ISO country code (by IP). null when not resolved. */
+  country: string | null;
+  /** Country tier 1/2/3. null when country is not resolved. */
+  tier: 1 | 2 | 3 | null;
+}
+```
+
+### `AuthChangeEvent`
+
+```ts
+type AuthChangeEvent =
+  | 'INITIAL_SESSION'   // first callback — hydration from storage
+  | 'SIGNED_IN'         // signIn by any method
+  | 'SIGNED_OUT'        // signOut, refresh failed 401, removal in another context
+  | 'TOKEN_REFRESHED'   // token rotation (same user.id)
+  | 'USER_UPDATED'      // upgradeAnonymousToEmail — same user.id, new email
+  | 'PASSWORD_RECOVERY'; // verifyOtp(type='recovery') — recovery session
+```
+
+Full details — in [Session management](/docs-v2/sdk-v3/auth/session#listening-for-changes).
+
+### `PaywallError`
+
+```ts
+class PaywallError extends Error {
+  readonly code: string;        // see /docs-v2/sdk-v3/errors
+  readonly status?: number;     // HTTP status when the error comes from the network
+  readonly cause?: unknown;     // original response body — for context-aware handling
+}
+```
+
+Full list of `code` values — in [Error codes](/docs-v2/sdk-v3/errors).
+
+## Subscribe / unsubscribe
+
+```ts
+const off = paywall.on('purchase_completed', (data) => { /* ... */ });
+off();                                  // unsubscribe via the returned function
+paywall.off('purchase_completed', handler); // or explicitly — for named handlers
+```
+
+### React: always unsubscribe in cleanup
+
+```tsx
+useEffect(() => {
+  return paywall.on('purchase_completed', () => unlockFeature());
+}, [paywall]);
+```
+
+### Subscribe BEFORE or AFTER the constructor?
+
+`PaywallUI` only emits events after `open()` — the constructor itself does not emit anything (except `userChange` through a microtask if there is a persisted user). So subscribing right after creating the instance is safe.
+
+<Callout type="warning">
+  **`autoDetectReturn: true` (the default)** — during construction, via `queueMicrotask`, the SDK scans the URL for `?paywall_status=paid|failed|cancelled`. If you subscribed **in the same tick**, you get the event. If your subscription is deferred (e.g. in `useEffect`), call `paywall.checkReturn()` after the subscription for critical post-purchase paths, or read the URL yourself.
+</Callout>
+
+## Shortcuts
+
+The most common subscriptions have dedicated methods:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Shortcut</Table.Th>
+      <Table.Th>Equivalent</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`paywall.onUserChange(cb)`</Table.Td>
+      <Table.Td>`paywall.on('userChange', cb)`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.billing.onBootstrapChange(cb)`</Table.Td>
+      <Table.Td>BillingClient level — fires only on `version` change.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.billing.onBalanceChange(cb, opts?)`</Table.Td>
+      <Table.Td>BillingClient level — AI-provider balances.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.auth?.onAuthChange(cb)`</Table.Td>
+      <Table.Td>AuthClient level — gives you `(event, session)` directly without a wrapper.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywall.onStateChange(cb, opts?)`</Table.Td>
+      <Table.Td>State machine — one listener instead of stitching `open`+`ready`+`close`+`error`.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Internal analytics events
+
+Separately from the public `on()` API, `PaywallUI` ships batch analytics to `${apiOrigin}/api/v1/paywall/<id>/events`:
+
+```
+paywall_opened, paywall_viewed, price_selected, checkout_started, purchase_completed,
+purchase_failed, paywall_closed, trial_blocked, trial_expired, visibility_blocked, error
+```
+
+Pass `analytics: false` in `PaywallUIOptions` to disable entirely. Custom endpoint / batch settings — via `analytics: { endpoint, flushIntervalMs, maxBufferSize }`. See [PaywallUIOptions.analytics](/docs-v2/sdk-v3/ui).
+
+<Callout type="info">
+  For your own analytics, subscribe via `paywall.on(...)` and forward events to your analytics SDK — don't write to the built-in batch channel directly.
+</Callout>
+
+## Cookbook
+
+### Conversion by acquirer
+
+```ts
+paywall.on('checkout_started', ({ acquiring, priceId }) => {
+  analytics.track('checkout_started', { acquiring, price_id: priceId });
+});
+
+paywall.on('purchase_completed', ({ priceId, restored }) => {
+  if (restored) return; // restored is not a conversion — don't move the counter
+  analytics.track('purchase_completed', { price_id: priceId });
+});
+```
+
+### Loading spinner for slow bootstrap
+
+```ts
+let loading = false;
+paywall.on('open', () => { loading = true; renderSpinner(); });
+paywall.on('ready', () => { loading = false; hideSpinner(); });
+paywall.on('error', () => { loading = false; hideSpinner(); });
+paywall.on('close', () => { loading = false; hideSpinner(); });
+```
+
+Or simpler — via `onStateChange`:
+
+```ts
+paywall.onStateChange((state) => {
+  if (state.view === 'loading') showSpinner();
+  else hideSpinner();
+});
+```
+
+### Re-trigger restore on cross-tab sign-in
+
+```ts
+paywall.on('authChange', ({ event }) => {
+  if (event === 'SIGNED_IN') {
+    // SDK will refetch user on its own; for aggressive UX you can force it
+    paywall.billing.getUser({ force: true });
+  }
+});
+```
+
+### Catch one specific purchase
+
+`purchase_completed` fires for new purchases, restored ones, and from the watcher — fine for unlock, but bad for confetti. Dedupe by `sessionId`:
+
+```ts
+const seenSessions = new Set<string>();
+paywall.on('purchase_completed', ({ sessionId, restored }) => {
+  if (restored) return;
+  if (!sessionId || seenSessions.has(sessionId)) return;
+  seenSessions.add(sessionId);
+  confetti();
+});
+```
+
+## Next steps
+
+- [PaywallUI](/docs-v2/sdk-v3/ui) — modal state, `getState()`, `onStateChange()`.
+- [Error codes](/docs-v2/sdk-v3/errors) — `PaywallError.code` table.
+- [BillingClient → events](/docs-v2/sdk-v3/bootstrap) — `onBootstrapChange`, `onUserChange`, `onBalanceChange`.

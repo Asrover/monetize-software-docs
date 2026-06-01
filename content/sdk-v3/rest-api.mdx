@@ -1,0 +1,505 @@
+import { Callout, Table, Cards } from 'nextra/components';
+
+# REST API
+
+Everything `@monetize.software/sdk` does is a wrapper over HTTPS endpoints — this page is the language-agnostic contract for backends that can't import the SDK (Python, Go, PHP, Ruby, .NET, Rust, etc.).
+
+<Callout type="info">
+  **If your backend is Node / Bun / Deno / Edge** — use the [SDK](/docs-v2/sdk-v3/headless-server). Typed wrappers, identity binding, retries and idempotency are handled for you. The REST API is the canonical contract underneath; both are equivalent.
+</Callout>
+
+## Base URL
+
+```
+https://YOUR_DOMAIN
+```
+
+If you have a [custom domain](/docs-v2/custom-domains) set up for the paywall, use it — that's the canonical `apiOrigin` (it's what the browser SDK uses, and what `start-checkout` falls back to when you don't pass explicit `successUrl`/`errorUrl`).
+
+<Callout type="info">
+  **Pure headless without a custom domain.** Custom domain is a paywall-level setting; it isn't enforced at the REST host level. If you're integrating purely server-to-server, you don't strictly need one — pass explicit `successUrl`/`errorUrl` on every `start-checkout` (your own app's URLs) and you're set. Contact support for the system host to point your requests at.
+</Callout>
+
+## Authentication
+
+Two paths, pick by where the call originates from.
+
+### `X-Api-Key` — server-side owner key
+
+Server-SDK key from **Dashboard → Settings → API keys**. Identifies *you* (the paywall owner) and can act on behalf of any user on your paywall(s). Used for every server-side method.
+
+```
+X-Api-Key: sk_live_...
+```
+
+<Callout type="warning">
+  **Never expose `X-Api-Key` to clients.** It's a server-only secret — read it from env vars / a secret manager. The SDK refuses to construct in browser context with this key set.
+</Callout>
+
+### `Authorization: Bearer` — per-user token
+
+Issued by monetize.software's auth (after `signInWith…` flows in the browser SDK). Identifies a single user; the backend resolves `user.id` from the token directly.
+
+```
+Authorization: Bearer eyJhbGc...
+```
+
+Bearer is the standard path for **browser** SPAs / Chrome extensions / Telegram Mini Apps where the user signed in via our `AuthClient`. For headless integrations with your own auth — use `X-Api-Key` instead.
+
+### Identity passing (apiKey path)
+
+When you call a user-scoped method with `X-Api-Key`, the backend needs to know **which user** you're acting on. Pass `email` and your stable `userId` in the request — the backend looks up the matching user on your paywall.
+
+The backend additionally verifies the identity is linked to your paywall. Querying users that never interacted with your paywall returns `identity_not_on_paywall` (404). Cross-paywall lookup is blocked by design.
+
+### Other headers
+
+| Header | When | Notes |
+|---|---|---|
+| `X-Paywall-Id` | Always (set by SDK) | Same value as the `{id}` URL segment |
+| `X-SDK-Version` | Optional | For our telemetry — when integrating directly, set to your client name + version |
+| `Idempotency-Key` | `start-checkout` | UUID v4. Duplicate POSTs with the same key return the same checkout URL |
+
+## Endpoints
+
+### `GET /api/v1/paywall/{id}/bootstrap`
+
+Returns the structural part of the paywall: settings, prices, offers, layout, locales. **Public** — no auth required for the structural payload. If you pass a Bearer token, the response also includes the user state (`user.has_active_subscription`, `purchases`).
+
+**Request**
+
+```
+GET /api/v1/paywall/3/bootstrap
+```
+
+**Response (200)** — see [BillingClient → bootstrap shape](/docs-v2/sdk-v3/bootstrap) for the full type. Key fields:
+
+```json
+{
+  "version": "sha256:abc...",
+  "settings": { "id": "3", "name": "Upgrade to Pro", "brand_color": "#000", ... },
+  "prices": [
+    {
+      "id": "monthly",
+      "currency": "USD",
+      "amount": 9.99,
+      "interval": "month",
+      "interval_count": 1,
+      "trial_days": 7,
+      "label": "Monthly",
+      "local": { "currency": "EUR", "amount": 9.49 }
+    }
+  ],
+  "offers": [...],
+  "layout": { "type": "modal", "blocks": [...] },
+  "locales": { "en": {...}, "es": {...} }
+}
+```
+
+**curl**
+
+```bash
+curl https://YOUR_DOMAIN/api/v1/paywall/3/bootstrap
+```
+
+### `POST /api/v1/paywall/{id}/start-checkout`
+
+Creates a checkout session with the configured payment processor and returns its hosted URL. Redirect your user there.
+
+**Headers**
+
+```
+Content-Type: application/json
+X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
+Idempotency-Key: <uuid-v4>    (mandatory for production)
+```
+
+**Body**
+
+```json
+{
+  "email": "user@example.com",
+  "priceId": "monthly",
+  "successUrl": "https://app.example.com/success?session=__SESSION__",
+  "errorUrl": "https://app.example.com/checkout-failed",
+  "shopUrl": "https://app.example.com/pricing",
+  "trial_days": null,
+  "ignoreActivePurchase": false,
+  "userMeta": { "source": "email_campaign_q2" },
+  "localCurrency": "EUR"
+}
+```
+
+- `email` — required in apiKey path. Ignored in Bearer path (server reads it from the token).
+- `priceId` — required. Get it from `bootstrap.prices[].id`. **Don't hardcode it** — price IDs are dynamic and change when pricing is edited, the payment processor is switched, or a plan is recreated. Always read the current value from `bootstrap` at runtime; a stale hardcoded ID returns `404`.
+- `successUrl`/`errorUrl` — optional overrides. Default to `settings.success_redirect_url` from the dashboard.
+- `trial_days` — optional override on the price-level trial.
+- `ignoreActivePurchase` — pass `true` for renew/upgrade flows; otherwise the backend returns `409` if the user already has an active subscription.
+- `userMeta` — JSON metadata stored against the user's row on this paywall.
+- `localCurrency` — ISO 4217 hint for geo pricing (the backend may override based on its own GeoIP).
+
+**Response (200)**
+
+```json
+{
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "userId": "auth-uuid",
+  "acquiring": "stripe"
+}
+```
+
+`acquiring` is one of `stripe`, `paddle`, `chargebee`, `freemius`, `overpay`.
+
+**Errors**
+
+| Status | Code / payload | When |
+|---|---|---|
+| 400 | `Missing required parameters: email, priceId` | Missing fields |
+| 400 | `Invalid successUrl format` etc. | URL doesn't match `https?://` |
+| 401 | `Invalid API key` | Bad `X-Api-Key` |
+| 403 | `Access denied: API key owner does not match paywall owner` | Key belongs to a different account |
+| 409 | `{ hasActivePurchase: true }` | User already has an active sub; retry with `ignoreActivePurchase: true` |
+
+**curl**
+
+```bash
+curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/start-checkout \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "email": "user@example.com",
+    "priceId": "monthly",
+    "successUrl": "https://app.example.com/success"
+  }'
+```
+
+### `GET /api/v1/paywall/{id}/user`
+
+Returns the user's purchases, balances, trial state, and computed geo-targeting for this paywall.
+
+**Headers**
+
+```
+X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
+```
+
+**Query (apiKey path only)**
+
+| Param | Required | Notes |
+|---|---|---|
+| `email` | one of two | Email of the user you're querying |
+| `user_id` | one of two | The user id returned by webhook events / by `start-checkout` response |
+
+In Bearer path, identity comes from the token — query params are ignored.
+
+**Response (200)** — full shape in [BillingClient docs](/docs-v2/sdk-v3/bootstrap#getuser). Key fields:
+
+```json
+{
+  "user": { "id": "...", "email": "...", "name": "...", "created_at": "..." },
+  "tier": 1,
+  "country": "US",
+  "balances": [{ "type": "standard", "count": 42 }],
+  "countryMatch": true,
+  "purchases": [
+    {
+      "id": "sub_123",
+      "status": "active",
+      "interval": "month",
+      "unit_amount": 999,
+      "currency": "USD",
+      "current_period_end": "2026-06-29T...",
+      "cancel_at_period_end": false
+    }
+  ],
+  "paid": true,
+  "trial": null,
+  "meta": { ... }
+}
+```
+
+In apiKey path, the `user` field is `undefined` — use `purchases`, `paid`, and `balances` instead. The `user` object is only populated in the Bearer path (where the auth session carries the profile).
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `identity_required` | apiKey without `?email=` or `?user_id=` |
+| 401 | `Unauthorized` | No Bearer and no apiKey |
+| 404 | `identity_not_found` | Email/userId doesn't exist in our system |
+| 404 | `identity_not_on_paywall` | Identity exists but never interacted with this paywall |
+
+**curl**
+
+```bash
+# apiKey path
+curl "https://YOUR_DOMAIN/api/v1/paywall/3/user?email=user@example.com" \
+  -H "X-Api-Key: $MONETIZE_API_KEY"
+```
+
+### `POST /api/paywall/cancel-subscription`
+
+Cancels a subscription at the end of the current billing period (acquirer-side). The DB is updated when the corresponding webhook arrives; the response carries a synthetic shape for immediate UI feedback.
+
+**Note the path** — this endpoint lives under `/api/paywall/` (not `/api/v1/paywall/`).
+
+**Headers**
+
+```
+Content-Type: application/json
+X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
+```
+
+**Body**
+
+```json
+{
+  "subscriptionId": "sub_123",
+  "paywallId": "3",
+  "cancellationReason": "too expensive",
+  "email": "user@example.com",
+  "userId": "your-internal-id"
+}
+```
+
+- `subscriptionId` — required. From `listPurchases()[].id` or your DB (synced via webhooks).
+- `paywallId` — required in apiKey path (used for cross-paywall protection). Ignored in Bearer path.
+- `cancellationReason` — required. Non-empty string.
+- `email` / `userId` — required in apiKey path (one of). Identity of the subscription owner.
+
+**Response (200)**
+
+```json
+{
+  "success": true,
+  "message": "Subscription cancelled successfully",
+  "subscription": {
+    "id": "sub_123",
+    "status": "active",
+    "cancel_at_period_end": true,
+    "cancel_at": "2026-06-29T00:00:00.000Z",
+    "canceled_at": null
+  }
+}
+```
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `identity_required` | apiKey without `paywallId` / email / userId |
+| 400 | `Subscription is already cancelled` | Idempotency: the sub was already cancelled |
+| 403 | `Unauthorized` | Bearer absent and apiKey absent (or anonymous Bearer) |
+| 404 | `identity_not_on_paywall` | apiKey path: identity exists but not on this paywall |
+| 404 | `Subscription not found` | `subscriptionId` doesn't match `(user_id, paywall_id)` |
+
+**curl**
+
+```bash
+curl -X POST https://YOUR_DOMAIN/api/paywall/cancel-subscription \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{
+    "subscriptionId": "sub_123",
+    "paywallId": "3",
+    "cancellationReason": "too expensive",
+    "email": "user@example.com"
+  }'
+```
+
+### `POST /api/v1/paywall/{id}/get-customer-portal`
+
+Returns a one-time URL to the acquirer-hosted customer portal (Stripe / Paddle / Chargebee / Overpay). Freemius does not provide a hosted portal — this endpoint returns `403` with `{ isTest }` instead.
+
+**Headers**
+
+```
+Content-Type: application/json
+X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
+```
+
+**Body (apiKey path)**
+
+```json
+{
+  "email": "user@example.com",
+  "userMeta": { "source": "..." }
+}
+```
+
+In Bearer path, both fields are ignored; identity is taken from the token.
+
+**Response (200)**
+
+```json
+{ "url": "https://billing.stripe.com/p/session/test_..." }
+```
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `Email is required` | apiKey path, body missing email |
+| 401 | `invalid_token` | Bearer present but invalid |
+| 403 | `{ isTest: "1" or "0" }` | Acquirer (e.g. Freemius) has no hosted portal, or the user has no active sub |
+
+**curl**
+
+```bash
+curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/get-customer-portal \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{ "email": "user@example.com" }'
+```
+
+### `POST /api/v1/paywall/{id}/support/ticket`
+
+Creates a support ticket on behalf of a user. Two transports — JSON for text only, multipart for attachments (images up to 10 MB each, max 5 files; MIME: `image/jpeg`, `image/png`, `image/webp`).
+
+**Auth** — `Authorization: Bearer` (recommended) or unauthenticated guest with `customer_email` in the body.
+
+**JSON body**
+
+```json
+{
+  "subject": "Refund request",
+  "content": "I would like to cancel and request a refund...",
+  "customer_email": "user@example.com"
+}
+```
+
+- `subject` — required, 3–200 chars.
+- `content` — required, 1–5000 chars.
+- `customer_email` — required for guests. Ignored if Bearer is present (server uses the session email — anti-spoofing).
+
+**Multipart body** — same fields plus `files`:
+
+```
+files: <File>
+files: <File>
+```
+
+**Response (200)**
+
+```json
+{ "ticket": { "id": 12345, "status": "open" } }
+```
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `invalid_payload` | Missing `subject` or `content` |
+| 400 | `subject_length` / `content_length` | Outside bounds |
+| 400 | `email_required` | Guest without `customer_email` |
+| 400 | `too_many_files`, `invalid_file` | Multipart constraints |
+| 429 | `rate_limit_exceeded` | More than 2 tickets per 24 h per user/email |
+
+**curl**
+
+```bash
+curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/support/ticket \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $USER_BEARER" \
+  -d '{
+    "subject": "Refund request",
+    "content": "I would like to cancel..."
+  }'
+```
+
+### `POST /api/v1/withdraw-tokens`
+
+Debits credits from a user's balance for a tokenized paywall. Use this when your backend calls AI providers directly (your own OpenAI/Anthropic keys) and only needs to charge after a successful response.
+
+**Auth** — `X-Api-Key` only. Bearer not accepted on this endpoint.
+
+**Headers**
+
+```
+Content-Type: application/json
+X-Api-Key: sk_live_...
+```
+
+**Body** — note `snake_case`:
+
+```json
+{
+  "paywall_id": "3",
+  "user_id": "auth-uuid",
+  "tokens": 1,
+  "token_type": "standard"
+}
+```
+
+- `paywall_id` — required.
+- `user_id` — required. **This is the monetize.software auth user.id**, not your own internal id. Get it from the `subscription.created` webhook (`event.data.user.id`) after the user goes through `start-checkout` for the first time, and store it alongside your own user row.
+- `tokens` — required, > 0.
+- `token_type` — optional, default `standard`. Must match a `tokenization_queries[].type` configured on the paywall.
+
+**Response (200)**
+
+```json
+{ "success": true, "remaining": 41 }
+```
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `Insufficient tokens` + `{ available, requested }` | Balance not enough |
+| 400 | `Token type X not found in user balance` | Wrong `token_type` |
+| 401 | `Invalid API key` | Bad / missing key |
+| 403 | `Unauthorized. You are not the owner of this paywall` | Key belongs to a different account |
+| 404 | `No balance found for this user and paywall` | The user has no balance on this paywall yet (e.g., hasn't completed a tokenized checkout or trial) |
+
+**curl**
+
+```bash
+curl -X POST https://YOUR_DOMAIN/api/v1/withdraw-tokens \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{
+    "paywall_id": "3",
+    "user_id": "auth-uuid",
+    "tokens": 1,
+    "token_type": "standard"
+  }'
+```
+
+## Idempotency
+
+Only `start-checkout` requires explicit idempotency — pass a UUID v4 in `Idempotency-Key`. Duplicate requests with the same key (within ~24 h) return the same `checkoutUrl` without a second call to the payment processor. Without the header the SDK auto-generates one, but a direct REST caller should send one to protect against double-submits on flaky networks.
+
+`cancelSubscription` is naturally idempotent on the acquirer side — sending the same cancellation twice has no effect; the second call returns `400 Subscription is already cancelled`.
+
+`withdrawTokens` is **not** idempotent — every call debits. Build your own dedup if your retry logic needs it (e.g., store an `idempotency_key` next to each AI-call record in your DB and skip the debit if it's already there).
+
+## Webhooks
+
+State-of-truth syncing — your backend receives signed events when payments/subscriptions change. Full payload format and signature verification:
+
+<Cards>
+  <Cards.Card title="Webhook events" href="/docs-v2/webhooks/events" description="Full payload reference for subscription.*, payment.*, refund.*" />
+  <Cards.Card title="Create a webhook" href="/docs-v2/webhooks/create-webhook" description="Endpoint setup and HMAC secret management" />
+</Cards>
+
+## Error format
+
+All errors return JSON:
+
+```json
+{ "error": "code_or_short_message", "message": "Human-readable detail (optional)" }
+```
+
+Some endpoints return additional fields (e.g. `hasActivePurchase`, `available`, `requested`). Status codes follow standard HTTP semantics — `400` for validation, `401` for missing/invalid auth, `403` for not-owner / forbidden, `404` for not-found, `409` for conflicts, `429` for rate limits, `5xx` for unexpected server errors.
+
+## SDK reference (when you can use it)
+
+If you're on a JS runtime (Node / Bun / Deno / Edge / Workers) — these are the same endpoints typed and wrapped:
+
+<Cards>
+  <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="bootstrap, createCheckout, listPurchases, cancelSubscription, getCustomerPortalUrl, support tickets" />
+  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="apiKey + identity pattern, withdrawTokens, webhook handler, per-user storage" />
+  <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Building your own My Subscriptions UI on top of these endpoints" />
+</Cards>

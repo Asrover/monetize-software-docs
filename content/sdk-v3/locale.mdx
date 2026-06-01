@@ -1,0 +1,148 @@
+import { Callout, Table } from 'nextra/components';
+
+# Localization and user language
+
+The paywall decides which language to display itself — it picks overrides from `bootstrap.locales` along a priority chain of sources. So the host app can **sync its own translations** with what the user sees in the modal, the SDK exposes a sync method `getUserLanguage()`.
+
+## How the SDK picks the language
+
+Each value in this chain is a candidate. The SDK walks them in order; **the first key present in `bootstrap.locales`** wins.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Priority</Table.Th>
+      <Table.Th>Source</Table.Th>
+      <Table.Th>Where it comes from</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>1</Table.Td>
+      <Table.Td>`navigator.language`</Table.Td>
+      <Table.Td>Full BCP-47 tag from the browser (`ru-RU`, `en-US`)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>2</Table.Td>
+      <Table.Td>base tag of `navigator.language`</Table.Td>
+      <Table.Td>Part before the hyphen: `ru-RU` → `ru`, `en-US` → `en`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>3</Table.Td>
+      <Table.Td>`settings.locale_default`</Table.Td>
+      <Table.Td>Server-derived per user country (IP): AT→de, RU→ru, LV→en, FR→fr, others→en</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+If none of the candidates appear in `bootstrap.locales` — the SDK applies no overrides and renders the **base** version of layout/prices (whatever the admin entered in the platform as the default). That means: if the base layout in admin is in English and `locales` only contains `ru`, Russian users see Russian, everyone else sees the English base.
+
+<Callout type="info">
+  Pricing (`currency`, `amount`) is a separate mechanism, **not** tied to language. It's chosen **only by the user's country** (IP→COUNTRY_CURRENCY_MAP), even if browser language and country language differ. That's deliberate: a user in Russia with an English browser still wants to see rubles. See the `price.local` field in `PaywallPrice`.
+</Callout>
+
+## API
+
+### `getUserLanguage()`
+
+Available on both `PaywallUI` and `BillingClient` — same thing, pick whichever is convenient:
+
+```ts
+paywall.getUserLanguage(): UserLanguageInfo;
+paywall.billing.getUserLanguage(): UserLanguageInfo;
+```
+
+A sync method, no separate request — the data is already in bootstrap. Call it any time after `paywall.billing.bootstrap()` (and `tag`/`browserLanguage` are available even before bootstrap if `navigator.language` exists).
+
+```ts
+interface UserLanguageInfo {
+  /** Best-guess BCP-47 tag for the host. Priority: applied → browserLanguage → countryLanguage.
+   *  null — bootstrap not loaded and navigator unavailable (e.g. an early call in a SW). */
+  tag: string | null;
+  /** Key from bootstrap.locales the SDK actually applied to layout/prices.
+   *  null = no match, base is rendered. */
+  applied: string | null;
+  /** navigator.language — what the browser reports. null in environments without navigator. */
+  browserLanguage: string | null;
+  /** Server-resolved language per user country (IP). From bootstrap.settings.locale_default. */
+  countryLanguage: string | null;
+}
+```
+
+### When to use which field
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Scenario</Table.Th>
+      <Table.Th>Field</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Switch host i18n so the surrounding buttons match the paywall's language</Table.Td>
+      <Table.Td>`tag` (or `applied`, if your translations key off every `locales` entry precisely)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Tell apart "paywall really is in Russian" from "SDK guessed but no overrides exist"</Table.Td>
+      <Table.Td>`applied !== null` → actually applied; `null` → SDK showed the base</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Analytics: how many users see incomplete locales (have `ru`, lack `fr`)</Table.Td>
+      <Table.Td>compare `tag` with `applied` — if different, locale fell back</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Tourist in Latvia with a Russian browser — what should your UI show</Table.Td>
+      <Table.Td>`browserLanguage` (trust the user) vs `countryLanguage` (trust geo) — your call</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Examples
+
+### Sync host i18n with the paywall
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+import i18n from 'i18next';
+
+const paywall = new PaywallUI({ paywallId: 'pw_123', auth: true });
+await paywall.billing.bootstrap();
+
+const { tag } = paywall.getUserLanguage();
+if (tag) {
+  await i18n.changeLanguage(tag);
+}
+```
+
+### React to changes (hot reload of paywall settings)
+
+`onBootstrapChange` fires on revalidate when the set of locales or `locale_default` changes. Subscribe and re-compute:
+
+```ts
+paywall.billing.onBootstrapChange(() => {
+  const { tag } = paywall.getUserLanguage();
+  if (tag) i18n.changeLanguage(tag);
+});
+```
+
+### Fallback analytics
+
+```ts
+const { tag, applied } = paywall.getUserLanguage();
+analytics.track('paywall_locale', {
+  shown: tag,                    // what the user sees
+  matched: applied,               // override actually applied (null = base)
+  fallback: tag !== applied      // true → no translation for the user's language
+});
+```
+
+<Callout type="warning">
+  `tag` is returned in the casing the source provided: `navigator.language` is usually `en-US` (Title-case region), `locale_default` from the server is lowercase (`en`). If your i18n requires strict format (`en-US` vs `en_US` vs `en`) — normalize on your side.
+</Callout>
+
+## What `getUserLanguage()` does **not** do
+
+- **Does not change** the paywall language — it's a readonly snapshot. The SDK doesn't expose a setter because language is decided by the server (locale_default) and by the browser (navigator.language). If you need to force a language for testing — change the browser language or mock `navigator.language`.
+- **Does not lazy-load** locales — `bootstrap.locales` arrives as one blob. If the desired language isn't in locales, the SDK won't fetch it later.
+- **Does not consider** `navigator.languages[]` (the preference list). The SDK only looks at the first element via `navigator.language`. Multi-preference fallback (e.g. user with `['lv', 'ru', 'en']` should get `ru` when `lv` wasn't authored) isn't supported yet — contact support if you need it.

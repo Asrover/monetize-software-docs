@@ -76,6 +76,27 @@ Learn about different webhook events and their usage scenarios to properly handl
 - Administrative refunds
 - Dispute resolutions
 
+## Subscription Object Fields
+
+The `data.subscription` object in `subscription.*` events contains the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Subscription identifier |
+| `status` | string | One of `active`, `trialing`, `past_due`, `canceled`, `incomplete` |
+| `current_period_start` | string (ISO) | Start of the current billing period |
+| `current_period_end` | string (ISO) | Next billing date. **Not rewound on immediate cancellation** — use `ended_at` for the actual end of access |
+| `trial_period_start` | string (ISO) | Start of trial, if any |
+| `trial_period_end` | string (ISO) | End of trial, if any |
+| `cancel_at_period_end` | boolean | `true` when cancellation is scheduled for the end of the current period |
+| `cancel_at` | string (ISO) | When the subscription will be cancelled (set together with `cancel_at_period_end: true`) |
+| `canceled_at` | string (ISO) | When the user requested cancellation |
+| `ended_at` | string (ISO) | When the subscription actually ended. Set on immediate cancellation and after `cancel_at` is reached |
+
+<Callout type="info">
+  To determine whether a subscription is currently active, check `status` and `ended_at`. If `ended_at` is set and not in the future, access should be revoked even if `current_period_end` is later. If `cancel_at_period_end` is `true`, the subscription is active but will not renew.
+</Callout>
+
 ## Event Scenarios
 
 ### Scenario 1: Lifetime Access Purchase
@@ -187,12 +208,33 @@ Updated `subscription.current_period_start` and `subscription.current_period_end
 <Tabs items={['End of Period', 'Immediate Cancellation']}>
   <Tabs.Tab>
     **Variant A:** Cancellation at period end
-    
+
     | Step | Event | Description |
     |------|-------|-------------|
     | 1 | User cancels | User requests cancellation |
-    | 2 | End of period | Subscription remains active until period end |
-    | 3 | `subscription.cancelled` | Subscription cancelled at period end |
+    | 2 | `subscription.updated` | Subscription scheduled for cancellation, remains active |
+    | 3 | End of period | Period reaches `cancel_at` |
+    | 4 | `subscription.cancelled` | Subscription actually cancelled |
+
+    First, when the user requests cancellation:
+
+    ```json
+    {
+      "type": "subscription.updated",
+      "data": {
+        "subscription": {
+          "id": "sub_active123",
+          "status": "active",
+          "cancel_at_period_end": true,
+          "cancel_at": "2025-02-15T12:30:45.000Z",
+          "canceled_at": "2024-02-15T12:30:45.000Z",
+          "current_period_end": "2025-02-15T12:30:45.000Z"
+        }
+      }
+    }
+    ```
+
+    Then, when the period ends:
 
     ```json
     {
@@ -200,24 +242,23 @@ Updated `subscription.current_period_start` and `subscription.current_period_end
       "data": {
         "subscription": {
           "id": "sub_active123",
-          "status": "cancelled",
+          "status": "canceled",
           "cancel_at_period_end": true,
-          "cancelled_at": "2024-02-15T12:30:45.000Z"
+          "canceled_at": "2024-02-15T12:30:45.000Z",
+          "ended_at": "2025-02-15T12:30:45.000Z"
         }
       }
     }
     ```
 
-    Event: **subscription.cancelled** - subscription cancelled at period end
-
     <Callout type="info">
-      Subscription remains in `active` status until the end of the period, then the subscription status changes to `cancelled`.
+      Subscription remains in `active` status with `cancel_at_period_end: true` until `cancel_at` is reached, then status changes to `canceled` and `ended_at` is set.
     </Callout>
 
   </Tabs.Tab>
   <Tabs.Tab>
     **Variant B:** Immediate cancellation
-    
+
     | Step | Event | Description |
     |------|-------|-------------|
     | 1 | User cancels | User requests immediate cancellation |
@@ -229,15 +270,21 @@ Updated `subscription.current_period_start` and `subscription.current_period_end
       "data": {
         "subscription": {
           "id": "sub_active123",
-          "status": "cancelled",
+          "status": "canceled",
           "cancel_at_period_end": false,
-          "cancelled_at": "2024-01-20T12:30:45.000Z"
+          "canceled_at": "2024-01-20T12:30:45.000Z",
+          "ended_at": "2024-01-20T12:30:45.000Z",
+          "current_period_end": "2025-01-20T12:30:45.000Z"
         }
       }
     }
     ```
 
     Event: **subscription.cancelled** - subscription immediately cancelled
+
+    <Callout type="warning">
+      For immediate cancellation, `current_period_end` keeps the original next-billing date (it is not rewound). Use `ended_at` as the actual end of access. If `ended_at` is set and not in the future, the subscription is closed regardless of `current_period_end`.
+    </Callout>
 
   </Tabs.Tab>
 </Tabs>
@@ -305,8 +352,9 @@ Updated `subscription.current_period_start` and `subscription.current_period_end
   "data": {
     "subscription": {
       "id": "sub_trial123",
-      "status": "cancelled",
-      "cancelled_at": "2024-01-18T12:30:45.000Z"
+      "status": "canceled",
+      "canceled_at": "2024-01-18T12:30:45.000Z",
+      "ended_at": "2024-01-18T12:30:45.000Z"
     }
   }
 }
@@ -387,8 +435,9 @@ Event: **refund.created** - refund processed
   "data": {
     "subscription": {
       "id": "sub_active123",
-      "status": "cancelled",
-      "cancelled_at": "2024-01-20T12:30:45.000Z"
+      "status": "canceled",
+      "canceled_at": "2024-01-20T12:30:45.000Z",
+      "ended_at": "2024-01-20T12:30:45.000Z"
     }
   }
 }

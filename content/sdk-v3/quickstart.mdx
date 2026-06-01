@@ -1,0 +1,390 @@
+import { Steps, Tabs, Callout, Cards } from 'nextra/components';
+
+# Quickstart — zero to paywall in 5 minutes
+
+SDK 3.0 covers three scenarios with one npm package: a modal in the browser, popup/content-script in a Chrome extension, and headless calls from a server. All three share **one `paywallId`** — you don't need separate paywalls per channel.
+
+## Before you start
+
+1. **A paywall is created** in the dashboard → "Paywalls" → "New Paywall". Remember the `paywallId` (the number in the URL).
+2. **At least one payment processor is connected** (Stripe / Paddle / Chargebee / Freemius).
+3. If you'll be using the API Gateway (metered AI calls) — also have a `providerId` (UUID from the "API Providers" section in the dashboard).
+
+`apiOrigin` for every example is `https://YOUR_DOMAIN`. If you have a [custom domain](/docs-v2/custom-domains), substitute yours.
+
+## Pick a scenario
+
+Three integration paths — pick by how much UI you want to own and where your auth lives. See [Overview](/docs-v2/sdk-v3) for a side-by-side comparison.
+
+<Tabs items={['Drop-in (Web)', 'Drop-in (Extension)', 'Custom UI', 'Headless (Server)']}>
+
+<Tabs.Tab>
+
+### Drop-in PaywallUI — Web / SPA
+
+Install the npm package, open the paywall with one line, listen for checkout success. Ready-made modal in a Shadow DOM with built-in email / OTP / OAuth login.
+
+<Steps>
+
+#### Install
+
+```bash
+pnpm add @monetize.software/sdk
+# or: npm i @monetize.software/sdk
+```
+
+#### Initialize
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true // turns on built-in email / OTP / OAuth login
+});
+```
+
+`auth: true` is enough for most integrations — the SDK creates an `AuthClient` itself, persists the session, refreshes tokens. If you already have your own `AuthClient` (or want a [hybrid identity](/docs-v2/sdk-v2/hybrid)), pass `identity` or `auth: <AuthClient>` explicitly.
+
+#### Open the paywall
+
+```ts
+document.getElementById('upgrade-btn').addEventListener('click', () => {
+  paywall.open();
+});
+```
+
+Already rendering your own pricing cards and want the click to skip the plan-picker step? Use [`paywall.checkout(priceId)`](/docs-v2/sdk-v3/ui#checkoutpriceid-opts) — the modal still handles preauth signin, popup-blocked retry, and the awaiting-payment screen:
+
+```ts
+document.querySelectorAll<HTMLButtonElement>('[data-price-id]').forEach((el) => {
+  el.addEventListener('click', () => paywall.checkout(el.dataset.priceId!));
+});
+```
+
+#### React to the purchase
+
+```ts
+paywall.on('purchase_completed', ({ priceId, sessionId }) => {
+  // update user state, unlock the feature
+});
+
+paywall.on('close', () => {
+  // user closed the modal without buying
+});
+
+paywall.on('error', (err) => {
+  console.error('paywall error', err);
+});
+```
+
+Full event list — in the [`PaywallUI` API](/docs-v2/sdk-v3/ui#events).
+
+</Steps>
+
+<Callout type="info">
+  **What's next:** [BillingClient](/docs-v2/sdk-v3/bootstrap) — when you need prices and user state before opening the modal. [Authentication](/docs-v2/sdk-v3/auth) — customising the login flow.
+</Callout>
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+### Chrome Extension (MV3)
+
+The separate package `sdk-extension` wraps the SDK in an offscreen document — one auth/bootstrap state is shared across the popup, content scripts on every tab, and the service worker.
+
+<Steps>
+
+#### Install
+
+```bash
+pnpm add @monetize.software/sdk-extension preact
+```
+
+#### `manifest.json`
+
+```json
+{
+  "manifest_version": 3,
+  "name": "My Extension",
+  "version": "1.0.0",
+  "permissions": ["offscreen", "storage"],
+  "host_permissions": ["https://YOUR_DOMAIN/*"],
+  "background": { "service_worker": "sw.js", "type": "module" }
+}
+```
+
+<Callout type="warning">
+  **Don't request `<all_urls>`** if your extension only talks to its own backend — it stretches CWS review and attracts AV vendors. Details — in [Installation → host_permissions](/docs-v2/sdk-v3/installation#host_permissions--what-to-pick).
+</Callout>
+
+#### Service worker — `sw.js`
+
+```ts
+import { installRouter } from '@monetize.software/sdk-extension/sw';
+
+installRouter({
+  offscreenUrl: chrome.runtime.getURL('offscreen.html')
+});
+```
+
+#### Offscreen — `offscreen.html` → `offscreen.ts`
+
+```ts
+import { startOffscreenServer } from '@monetize.software/sdk-extension/offscreen';
+
+startOffscreenServer({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+```
+
+All network traffic, auth refresh and storage live here. Popup / content script just paint the UI.
+
+#### Popup / content script
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk-extension';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+
+paywall.open();
+
+paywall.on('purchase_completed', ({ priceId }) => {
+  // signin/upgrade in the popup — every tab sees it via storage.watch
+});
+```
+
+The API is identical to the web version — `PaywallUI` proxies calls through a chrome port into offscreen under the hood.
+
+</Steps>
+
+<Callout type="info">
+  **What's next:** [Installation → Chrome Extension](/docs-v2/sdk-v3/installation#chrome-extension-mv3) — why `web_accessible_resources` is NOT needed, what to do about `<all_urls>`, how to pass CWS review.
+</Callout>
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+### Custom UI — your own pricing page and login
+
+You render your own pricing cards / login form / "Buy" button; the SDK provides `BillingClient` for prices/checkout and `AuthClient` for our auth flows.
+
+<Steps>
+
+#### Install
+
+```bash
+pnpm add @monetize.software/sdk
+```
+
+#### Initialize
+
+```ts
+import { BillingClient, AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN'
+});
+
+const billing = new BillingClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth
+});
+```
+
+#### Render your own pricing cards
+
+```ts
+const prices = await billing.getPrices();
+// prices: [{ id, amount, currency, interval, label, ... }, ...]
+// Render them however you want — your JSX, your DOM, your design system.
+```
+
+#### Wire the "Buy" button
+
+```ts
+async function onBuyClick(priceId: string) {
+  if (!auth.user) {
+    // Show your login UI first; once signed in, retry the call.
+    return showLoginModal();
+  }
+
+  const { url } = await billing.createCheckout({
+    priceId,
+    idempotencyKey: crypto.randomUUID()
+  });
+  window.location.assign(url);
+}
+```
+
+#### Gate a feature
+
+```ts
+const access = await billing.getAccess?.({}) ?? { granted: false };
+if (access.granted) runFeature();
+else showUpgradeBanner();
+```
+
+For React, the same flow with hooks instead of imperative calls — see [React / Next.js bindings](/docs-v2/sdk-v3/react).
+
+</Steps>
+
+<Callout type="info">
+  **What's next:** [BillingClient](/docs-v2/sdk-v3/bootstrap) — full method reference. [Authentication](/docs-v2/sdk-v3/auth) — every login flow. [API Gateway](/docs-v2/sdk-v3/api-gateway) — metered AI calls when you don't have a backend.
+</Callout>
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+### Headless (server-side)
+
+Your own backend, your own UI? Take only the `core` export (≤ 8 KB gz, no Preact/UI). Two typical headless scenarios:
+
+- **A. Server-side billing** — `BillingClient` for bootstrapping prices and starting checkout from your backend.
+- **B. API Gateway** — metered proxy to AI providers, balances debited automatically.
+
+<Callout type="info">
+  **Not on a JS runtime?** (Python, Go, PHP, Ruby, .NET…) — see the [REST API reference](/docs-v2/sdk-v3/rest-api). Same endpoints, language-agnostic specs with `curl` examples.
+</Callout>
+
+<Steps>
+
+#### Install
+
+```bash
+pnpm add @monetize.software/sdk
+```
+
+#### Option A: server-side billing
+
+```ts
+import { BillingClient } from '@monetize.software/sdk/core';
+
+// `apiKey` identifies you (the paywall owner) — server-only, from the dashboard.
+// `identity` binds the call to a user from YOUR auth system.
+const billing = new BillingClient({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  apiKey: process.env.MONETIZE_API_KEY!,
+  identity: {
+    email: yourUser.email,
+    userId: yourUser.id // your stable internal ID
+  }
+});
+
+const bootstrap = await billing.bootstrap();
+// bootstrap.prices, .settings, .locales — no identity needed for this read
+
+const checkout = await billing.createCheckout({
+  priceId: bootstrap.prices[0].id,
+  idempotencyKey: crypto.randomUUID() // mandatory for production
+});
+// Redirect the user to checkout.url
+```
+
+<Callout type="info">
+  **Got your own auth?** This is the canonical pattern: `apiKey` server-side + `identity` from your user record. Every server method (`createCheckout`, `listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`, support tickets) accepts this combination — no need to register users in monetize.software's auth. For state syncing, use [webhooks](/docs-v2/webhooks/events).
+</Callout>
+
+#### Option B: metered AI billing via `withdrawTokens`
+
+You already have a backend talking to OpenAI/Anthropic with your own provider keys. After each successful call, debit credits from the user's balance with one HTTP request:
+
+```ts
+// 1. Call the provider yourself
+const aiResponse = await openai.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+// 2. Debit credits on success
+const res = await fetch(`${process.env.PAYWALL_ORIGIN}/api/v1/withdraw-tokens`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Api-Key': process.env.MONETIZE_API_KEY!
+  },
+  body: JSON.stringify({
+    paywall_id: '3',
+    user_id: ourUserId,        // see below — must be our auth user.id
+    tokens: 1,
+    token_type: 'standard'
+  })
+});
+const { remaining } = await res.json();
+```
+
+`user_id` here is the monetize.software auth user.id. You get it from webhook events (`subscription.created` → `data.user.id`) after the user goes through `createCheckout` once, and store it next to your own user record.
+
+<Callout type="info">
+  **Why not `ApiGatewayClient`?** The gateway exists so **browser-only** apps can do metered AI without exposing provider keys. Your backend already has those keys; routing through us would just add a network hop. The gateway is browser/extension scope, not headless.
+</Callout>
+
+</Steps>
+
+<Callout type="info">
+  **What's next:** [Headless / server-side](/docs-v2/sdk-v3/headless-server) — full server-side guide (apiKey setup, token withdrawal, webhooks, error handling). [API Gateway](/docs-v2/sdk-v3/api-gateway) — only when you don't have a backend (SPA / Chrome extension / Telegram Mini App).
+</Callout>
+
+</Tabs.Tab>
+
+</Tabs>
+
+## What all scenarios have in common
+
+- **One `paywallId`** across drop-in / custom UI / headless — switch paths without migrating data.
+- **One `apiOrigin`** (or one custom domain), or none at all for pure headless.
+- **Unified auth model** — `AuthClient` behaves the same way in browser scenarios; headless uses `apiKey` + `identity` and gets the same outcome on the backend.
+- **Identical event signatures** — `purchase_completed`, `authChange`, `userChange` have the same shape whether you're listening from `PaywallUI`, `BillingClient`, or webhooks.
+
+## Next steps
+
+<Cards>
+  <Cards.Card
+    title="Installation"
+    href="/docs-v2/sdk-v3/installation"
+    description="Extended install, bundle budget, manifest, host_permissions"
+  />
+  <Cards.Card
+    title="BillingClient"
+    href="/docs-v2/sdk-v3/bootstrap"
+    description="Bootstrap, cache, cross-context sync, optimistic updates"
+  />
+  <Cards.Card
+    title="Authentication"
+    href="/docs-v2/sdk-v3/auth"
+    description="Email/OTP/OAuth, anonymous sessions, hybrid identity"
+  />
+  <Cards.Card
+    title="API Gateway"
+    href="/docs-v2/sdk-v3/api-gateway"
+    description="Metered proxy to AI, balance state, quota handling"
+  />
+  <Cards.Card
+    title="Events"
+    href="/docs-v2/sdk-v3/events"
+    description="Full list of PaywallUI and BillingClient events"
+  />
+  <Cards.Card
+    title="Headless / server-side"
+    href="/docs-v2/sdk-v3/headless-server"
+    description="apiKey, per-user Bearer, token withdrawal, webhooks"
+  />
+  <Cards.Card
+    title="Migration from v2"
+    href="/docs-v2/sdk-v3/migration-from-v2"
+    description="Moving from script-tag SDK to bundled package"
+  />
+</Cards>

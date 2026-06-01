@@ -100,56 +100,24 @@ Users see additional option:
 
 </Steps>
 
-## Technical Implementation
+## SDK Implementation
 
-### Checking User Status
+The exact API differs by SDK — pick your side:
 
-```javascript
-// Check if user is authenticated (including anonymous users)
-try {
-  const userInfo = await paywall.getUser();
-  console.log('User authenticated:', userInfo.user);
+<Cards>
+  <Cards.Card
+    title="SDK v3 — AuthClient.signInAnonymously()"
+    href="/docs-v2/sdk-v3/auth/anonymous"
+    description="Resume by anon refresh-token, upgradeAnonymousToEmail, is_anonymous flag"
+  />
+  <Cards.Card
+    title="SDK v2 (legacy) — paywall.getUser()"
+    href="/docs-v2/sdk-v2/client-side/anonymous-sign-in"
+    description="Detect anonymous via email === null, anonymous user response shape"
+  />
+</Cards>
 
-  // Check if user is anonymous
-  if (!userInfo.user.email) {
-    console.log('Anonymous user detected');
-    showAnonymousUserBanner();
-  } else {
-    console.log('Full user account:', userInfo.user.email);
-  }
-
-} catch (error) {
-  console.log('User not authenticated');
-}
-```
-
-### Anonymous User Properties
-
-Anonymous users have the same structure as regular users, except:
-
-```javascript
-{
-  user: {
-    id: "anonymous_user_123456789",
-    email: null,  // No email for anonymous users
-    name: "Anonymous User",
-    avatar: "default_avatar_url",
-    created_at: "2024-01-15T10:30:45.000Z"
-  },
-  balances: [
-    { type: "standard", count: 10 },  // Trial tokens deposited
-    { type: "advanced", count: 2 }
-  ],
-  // ... other user properties
-}
-```
-
-### Data Considerations
-
-- Anonymous users have temporary accounts
-- Data is tied to browser/device
-- Account upgrade preserves data
-- Clear browser data = lost session
+Both ride on the same `allow_anonymous` flag in paywall settings — your dashboard configuration applies regardless of which SDK you ship.
 
 ## Limitations
 
@@ -163,16 +131,16 @@ Anonymous users have the same structure as regular users, except:
 ## Next Steps
 
 <Cards>
-  <Cards.Card 
-    title="Paywall Tokenization" 
+  <Cards.Card
+    title="SDK v3 — Anonymous sign-in"
+    href="/docs-v2/sdk-v3/auth/anonymous"
+  />
+  <Cards.Card
+    title="SDK v2 — Anonymous sign-in"
+    href="/docs-v2/sdk-v2/client-side/anonymous-sign-in"
+  />
+  <Cards.Card
+    title="Paywall Tokenization"
     href="/docs-v2/paywall/tokenization"
-  />
-  <Cards.Card 
-    title="Get User Data" 
-    href="/docs-v2/paywall-api/get-user"
-  />
-  <Cards.Card 
-    title="Open Paywall" 
-    href="/docs-v2/paywall-api/open"
   />
 </Cards>

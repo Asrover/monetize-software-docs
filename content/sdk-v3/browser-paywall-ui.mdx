@@ -1,0 +1,60 @@
+import { Callout, Cards, Table } from 'nextra/components';
+
+# Browser — drop-in Paywall UI
+
+The fastest path. You install the SDK, drop `PaywallUI` somewhere in your app, and the ready-made paywall renders inside a Shadow DOM modal — branded from the dashboard, with built-in email / OTP / OAuth login and automatic state sync across tabs.
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk/ui';
+
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+
+document.getElementById('upgrade').addEventListener('click', () => paywall.open());
+
+paywall.on('purchase_completed', () => unlockPremium());
+```
+
+## When to pick this
+
+- You want a paywall **as fast as possible** — copy the snippet, configure prices/copy in the dashboard, ship.
+- You're fine with our auth (email / OTP / OAuth / anonymous) — no need to integrate your own login.
+- The visual surface is acceptable: brand color, layout (vertical / horizontal / compact), copy, localization — all from the dashboard.
+- Your app runs in a browser context: SPA, plain HTML, Chrome extension, Telegram Mini App.
+
+## What you don't need
+
+- A backend — checkout, auth, trial counting all run client-side via the SDK.
+- A custom checkout UI — Stripe/Paddle/Chargebee/Freemius/Overpay hosted checkout handles payment collection.
+- Manual state sync — `purchase_completed` fires when the user comes back from the hosted checkout; the SDK refreshes state automatically.
+
+## Form factors
+
+<Cards>
+  <Cards.Card title="PaywallUI (the main class)" href="/docs-v2/sdk-v3/ui" description="Open / close, state machine, container customization, events" />
+  <Cards.Card title="Chrome Extension (MV3)" href="/docs-v2/sdk-v3/installation#chrome-extension-mv3" description="Offscreen document + shared state across popup / content scripts / service worker" />
+</Cards>
+
+<Callout type="info">
+  **Using React?** [React bindings](/docs-v2/sdk-v3/react) give you `<PaywallProvider>`, declarative components (`<PaywallGate>`, `<PaywallButton>`), and hooks (`usePaywall`, `usePaywallUser`) — same API, less boilerplate.
+</Callout>
+
+## What's next
+
+Once `PaywallUI` is mounted, these features are wired automatically and worth knowing:
+
+<Cards>
+  <Cards.Card title="Trial" href="/docs-v2/sdk-v3/trial" description="trial_blocked / trial_expired events, getAccess(), skipTrial" />
+  <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Open Stripe/Paddle hosted portal in one line" />
+  <Cards.Card title="Events" href="/docs-v2/sdk-v3/events" description="purchase_completed, authChange, userChange — what to subscribe to" />
+  <Cards.Card title="Locale & language" href="/docs-v2/sdk-v3/locale" description="Auto-detection, getUserLanguage(), per-paywall locales" />
+</Cards>
+
+<Callout type="info">
+  **Need a custom pricing page (not the modal)?** Switch to [Browser — custom UI](/docs-v2/sdk-v3/browser-custom-ui) and use `BillingClient.getPrices()` to render your own cards.
+
+  Want to keep the modal's checkout flow but render your own plan cards? Use [`paywall.checkout(priceId)`](/docs-v2/sdk-v3/ui#checkoutpriceid-opts) (or `<PaywallButton priceId={…}>` in React) — your cards drive the plan selection, the SDK still handles the auth-gate, popup-blocked retries and the awaiting-payment screen.
+</Callout>

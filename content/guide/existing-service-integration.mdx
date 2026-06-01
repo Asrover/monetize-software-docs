@@ -503,12 +503,14 @@ async function handleSubscriptionCancelled(data) {
     // Update subscription status
     await localUser.update({
       subscriptionStatus: 'cancelled',
-      cancellationDate: new Date(subscription.cancelled_at),
+      cancellationDate: new Date(subscription.canceled_at),
+      endedAt: subscription.ended_at ? new Date(subscription.ended_at) : null,
       cancelAtPeriodEnd: subscription.cancel_at_period_end
     });
-    
-    // Revoke premium access (or set grace period if cancel_at_period_end is true)
-    if (!subscription.cancel_at_period_end) {
+
+    // Revoke access if the subscription has actually ended.
+    // For end-of-period cancellation, ended_at is null until the period closes.
+    if (subscription.ended_at) {
       await revokePremiumAccess(localUser.id);
     }
     

@@ -1,0 +1,218 @@
+import { Callout, Steps, Tabs } from 'nextra/components';
+
+# AI agent prompt — hand the integration to an agent
+
+Integrating SDK 3.0 into someone else's project and want to delegate the chores to a coding agent (Cursor, Claude Code, Copilot, Windsurf, Cline)? This page gives you a **ready-made prompt + a single link** the agent needs for a full-stack integration.
+
+<Callout type="info">
+  **TL;DR.** Copy the prompt below, fill in your `paywallId` / `apiOrigin` / channel and paste it to the agent. It will fetch [/llms-sdk-v3.txt](https://monetize.software/llms-sdk-v3.txt), read the focused pack (~190 KB) and propose a plan + code.
+</Callout>
+
+## What is `llms-sdk-v3.txt`
+
+It's a **focused dump** of SDK 3.0 docs in one `.txt` file following the [llmstxt.org](https://llmstxt.org) standard. Unlike the full [llms-full.txt](https://monetize.software/llms-full.txt) (436 KB, all of docs-v2), the agent pack contains **only** SDK 3.0–relevant material:
+
+- Full SDK 3.0 reference: `AuthClient`, `BillingClient`, `PaywallUI`, `ApiGatewayClient`, bootstrap, events, errors, storage adapters, localization, security model.
+- Three end-to-end integration guides: **Web (SPA)**, **Chrome Extension (MV3)**, **Headless (server / custom UI)**.
+- Paywall features: anonymous sign-in, trial, tokenization, translations, local pricing.
+- Setup overviews: payment processors, custom domains, webhooks.
+
+The file is regenerated on every doc deploy and is always current. The size is calibrated to fit in any modern model's context (Claude / GPT-4o / Gemini) with headroom for the project code.
+
+## Step 1. Gather parameters
+
+Before launching the agent, have these ready:
+
+| Parameter      | Where to get it                                                  | Example                          |
+| -------------- | ---------------------------------------------------------------- | ------------------------------- |
+| `paywallId`    | Dashboard → **Paywalls** → open the relevant one, ID is in the URL | `3`                             |
+| `apiOrigin`    | Your paywall's [custom domain](/docs-v2/custom-domains)          | `https://billing.theirapp.com`  |
+| Channel        | `web` / `extension` / `headless`                                 | `web`                           |
+| `providerId`   | (optional) Dashboard → **API Providers**, for the AI proxy       | `8b3f...-uuid`                  |
+| Auth needs     | Login required? If yes — which providers (Google, Apple)?        | `email + Google OAuth`          |
+
+<Callout type="warning">
+  **`apiOrigin` is mandatory** at SDK init and has no fallback. If you haven't connected a custom domain yet — do that first, [instructions](/docs-v2/custom-domains/create-domain). Until then the integration won't work.
+</Callout>
+
+## Step 2. Copy the prompt for your channel
+
+<Tabs items={['Web (SPA)', 'Chrome Extension (MV3)', 'Headless (server)']}>
+
+<Tabs.Tab>
+
+```text copy
+Integrate a paid SaaS paywall via Monetize.software SDK 3.0 into this project.
+
+Integration parameters:
+- paywallId: <YOUR_PAYWALL_ID>
+- apiOrigin: https://<YOUR_CUSTOM_DOMAIN>
+- Channel: web (SPA)
+- Login: built-in (auth: true) — email + OTP + OAuth per paywall config
+- What to unlock after payment: <describe the feature, e.g. "/dashboard access and the Export PDF button">
+
+Before writing code:
+1. Read the focused documentation pack: https://monetize.software/llms-sdk-v3.txt
+   It's the full SDK 3.0 reference + the web (SPA) guide. Use it as the source of truth.
+2. Examine my project structure: where the router lives, where components live, how
+   "logged in / premium" is currently determined (if at all).
+3. Propose a short plan: which files you'll create/change, where the SDK init goes,
+   where the Upgrade button lives, how you'll store premium state.
+
+After plan approval:
+- Install `@monetize.software/sdk` with my package manager.
+- Create a PaywallUI with the specified parameters and events
+  `purchase_completed` / `authChange` / `userChange`.
+- Wire up the Upgrade button and unlock after `purchase_completed` (no reload).
+- If the project has a backend — add a webhook handler for
+  `subscription.created` / `subscription.cancelled` to persist state in my DB.
+
+Rules:
+- Do NOT load the SDK via `<script src>` / CDN — npm only.
+- Do NOT invent `apiOrigin`, use exactly what I provided.
+- If something is unclear (fallback behaviour, which route is "premium") — ask.
+```
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+```text copy
+Integrate a paid paywall via Monetize.software SDK 3.0 into this Chrome extension (Manifest V3).
+
+Parameters:
+- paywallId: <YOUR_PAYWALL_ID>
+- apiOrigin: https://<YOUR_CUSTOM_DOMAIN>
+- Channel: Chrome Extension (MV3)
+- Where to show the paywall: <popup / content-script / both>
+- What to unlock after payment: <describe the feature>
+
+Before writing code:
+1. Read the focused pack: https://monetize.software/llms-sdk-v3.txt
+   Specifically: "Installation → Chrome Extension (MV3)",
+   "Chrome Extension with SDK 3.0" in Integration Guides, plus "Security".
+2. Look at the current manifest.json and SW. If absent, create them.
+3. Propose a plan: where offscreen lives, where the SW router lives,
+   where popup/content-script calls PaywallUI.
+
+After approval:
+- Install `@monetize.software/sdk-extension preact`.
+- In manifest.json add `"offscreen"` and `"storage"` permissions.
+- Put ONLY my apiOrigin host into `host_permissions`, NOT `<all_urls>`
+  (that lengthens CWS review).
+- In the service worker — `installRouter({ offscreenUrl })`.
+- In the offscreen page — `startOffscreenServer({ paywallId, apiOrigin, auth: true })`.
+- In popup/content-script — `new PaywallUI({ paywallId, apiOrigin, auth: true })`,
+  `paywall.open()`.
+- Subscribe to `purchase_completed` — every tab sees the upgrade via storage.watch.
+
+Rules:
+- SDK 3.0 is the only path for MV3 extensions (legacy script-tag is forbidden by CWS).
+- Do NOT load code from any CDN — CWS will stop the review.
+- Do NOT invent `apiOrigin`.
+- If something is unclear (popup vs content-script, where the UI runs) — ask.
+```
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+```text copy
+Wire up Monetize.software SDK 3.0 in headless mode to my backend / custom UI.
+
+Parameters:
+- paywallId: <YOUR_PAYWALL_ID>
+- apiOrigin: https://<YOUR_CUSTOM_DOMAIN>
+- Channel: headless (server / custom UI, no built-in modal)
+- Scenario: <A. Server-side billing (custom checkout flow) / B. API Gateway (metered AI proxy) / both>
+- (if B) providerId: <UUID_FROM_DASHBOARD>
+- Where the code runs: <Node / Edge / Cloudflare Workers / ...>
+- How users are identified in my system: <userId from my DB / Bearer JWT / ...>
+
+Before writing code:
+1. Read the focused pack: https://monetize.software/llms-sdk-v3.txt
+   Specifically: "Headless Billing with SDK 3.0", "BillingClient — bootstrap",
+   "API Gateway", "Errors", "Storage adapters", "Security".
+2. Look at my current auth middleware and how userId is fetched.
+3. Propose a plan: which endpoints you'll add, where SDK init lives,
+   how `AuthSession` is stored.
+
+After approval:
+- Install `@monetize.software/sdk`. Import only from `@monetize.software/sdk/core`.
+- For billing — `AuthClient` + `BillingClient` with a storage adapter for my runtime
+  (Node = file/Redis/memory; Edge = KV/Durable Object).
+- For API Gateway — `ApiGatewayClient` with `userId` (stable server-side ID).
+- Handle `QuotaExceededError` explicitly — redirect to my upgrade flow.
+- Add a webhook handler for `subscription.created` / `subscription.cancelled` if you
+  need a persistent copy of state in my DB.
+
+Rules:
+- NEVER pass `userId` from browser code (headless only, otherwise runtime warning).
+- In the browser — `auth: <AuthClient>`, Bearer token.
+- Do NOT invent `apiOrigin` or `providerId`.
+- If the runtime is non-standard (Workers / Deno / Bun) and storage isn't obvious — ask.
+```
+
+</Tabs.Tab>
+
+</Tabs>
+
+## Step 3. (optional) Attach the pack to Cursor / Claude Code
+
+To guarantee the agent follows the link and keeps it in context:
+
+<Tabs items={['Cursor', 'Claude Code', 'Windsurf']}>
+
+<Tabs.Tab>
+
+In Cursor: <kbd>⌘L</kbd> → `@Docs` → **Add new doc** → paste `https://monetize.software/llms-sdk-v3.txt`. Name it `monetize-sdk-v3`. Now `@monetize-sdk-v3` is available in chat — mention it in the prompt and Cursor will read it.
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+Claude Code resolves URLs straight in the prompt — it fetches automatically before starting. You can also save the pack as a file in the repo and put a line in `CLAUDE.md`:
+
+```md
+SDK 3.0 reference: see ./docs/monetize-sdk-v3.txt — read it before editing paywall code.
+```
+
+</Tabs.Tab>
+
+<Tabs.Tab>
+
+In Windsurf: settings → **Memories** → **Custom rules** → add:
+
+```text
+Before editing anything paywall-related, fetch and read
+https://monetize.software/llms-sdk-v3.txt — single source of truth for SDK 3.0.
+```
+
+</Tabs.Tab>
+
+</Tabs>
+
+## What NOT to expect from the agent
+
+- **Creating a paywall in the dashboard.** Manual step — the agent doesn't have access to your monetize.software account.
+- **Configuring a payment processor.** Manual too: Stripe keys, Paddle vendor — added via the dashboard UI.
+- **Connecting a custom domain.** Done once on your side ([instructions](/docs-v2/custom-domains/create-domain)). Once DNS is live, the agent gets a ready `apiOrigin`.
+- **Real payment testing.** Use [test IDs and test mode](/docs-v2/payment-processor/overview) — the agent can suggest which cards, but verification is on you.
+
+## If the integration doesn't work
+
+Give the agent this follow-up:
+
+```text copy
+The integration builds but <describe the issue: "paywall.open() shows nothing" /
+"401 on bootstrap" / "Stripe checkout returns 400">.
+
+Re-check against https://monetize.software/llms-sdk-v3.txt:
+1. The "Errors" and "Security" sections — common apiOrigin / CORS issues.
+2. The "Events" section — could an event be firing before we subscribed?
+3. Does the `paywallId` match what's in the dashboard?
+
+If the problem is in my config (not the code) — tell me explicitly what I should check
+in the dashboard / payment processor.
+```
+

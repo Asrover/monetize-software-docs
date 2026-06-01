@@ -1,0 +1,360 @@
+import { Callout, Table } from 'nextra/components';
+
+# Storage adapters
+
+`StorageAdapter` is the single interface to persistent storage. The SDK writes everything that must survive a reload through it: auth session, bootstrap cache, balances, visitor id, trial counter. By default the SDK picks an implementation that matches the runtime — usually you don't need to configure anything. This page covers when it's worth supplying your own adapter and how to do it right.
+
+## Auto-detection
+
+`createStorage()` without arguments picks by priority:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Runtime</Table.Th>
+      <Table.Th>Implementation</Table.Th>
+      <Table.Th>Cross-context sync</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Chrome Extension (has `chrome.runtime.id`)</Table.Td>
+      <Table.Td>`chrome.storage.local`</Table.Td>
+      <Table.Td>✅ `chrome.storage.onChanged` — popup ↔ background ↔ content scripts in every tab ↔ options page.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Browser (has `window.localStorage`)</Table.Td>
+      <Table.Td>`window.localStorage`</Table.Td>
+      <Table.Td>✅ Native `storage` event — multi-tab same-origin.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Node / Deno / Bun / Edge / tests</Table.Td>
+      <Table.Td>In-memory `Map`</Table.Td>
+      <Table.Td>❌ Current process only. Reload = logout.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+<Callout type="info">
+  Detection runs inside every SDK client's constructor. If you want a single adapter across `AuthClient` + `BillingClient`, create it once and pass it explicitly via `opts.storage`.
+</Callout>
+
+## Interface
+
+```ts
+interface StorageAdapter {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+  /**
+   * Optional. Subscription to external changes of `key` (another tab,
+   * background context). Returns an unsubscribe function.
+   *
+   * - `value`: new value or `null` (deleted / absent).
+   * - Fires ONLY for cross-context changes; calling `cb` for your own
+   *   setItem/removeItem is NOT required.
+   */
+  watch?(key: string, cb: (value: string | null) => void): () => void;
+}
+```
+
+Every method is `async`. This is required for `chrome.storage.local` (callback API wrapped in Promise) and for server-side adapters (Redis, KV).
+
+`watch` is optional. Without it, **cross-context sync does not work** — sign-in in one tab won't propagate to another automatically. The memory fallback has no `watch` by design.
+
+## Keys
+
+All keys used by the SDK are exported from `STORAGE_KEYS`:
+
+```ts
+import { STORAGE_KEYS } from '@monetize.software/sdk/core';
+```
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Key</Table.Th>
+      <Table.Th>Contents</Table.Th>
+      <Table.Th>Identity-bound</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`pw-visitor-id`</Table.Td>
+      <Table.Td>UUID v4 — stable visitor identifier for analytics. Not PII.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-auth-v1`</Table.Td>
+      <Table.Td>`AuthSession` (access_token, refresh_token, expires_at, user). Source of truth for login.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-anon-rt-v1`</Table.Td>
+      <Table.Td>Refresh token of the last anonymous user. Survives signOut so the next signInAnonymously picks up the same anon user. Cleared by `signOut({forgetAnonymous: true})` or by a 401 from refresh.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-bootstrap-v1`</Table.Td>
+      <Table.Td>Persisted bootstrap (settings/prices/offers/layout/locales/version). 1h TTL.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-{identityKey}-user-v1`</Table.Td>
+      <Table.Td>Last-known `PaywallUser` — offline fallback. Key is tied to identity so another user's state doesn't leak after a switch.</Table.Td>
+      <Table.Td>✅</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-{identityKey}-balances-v1`</Table.Td>
+      <Table.Td>Persisted balances (AI providers × tokenization queries). 5min TTL.</Table.Td>
+      <Table.Td>✅</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-last-login-method`</Table.Td>
+      <Table.Td>`'email' | 'google' | 'apple' | 'github' | 'facebook'` — what the user picked last time. For UI prefill.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-last-login-email`</Table.Td>
+      <Table.Td>User's email for form prefill.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-trial-*`</Table.Td>
+      <Table.Td>Trial counter (firstOpenAt / skipTimes). Shape depends on the paywall's trial mode.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+`identityKey` is a stable hash of the current identity (Bearer user.id, email, or anonymousId). On `setIdentity` the key changes — the SDK unsubscribes from the old `watch` and re-subscribes under the new one, so state from the previous identity doesn't leak.
+
+## When to swap the adapter
+
+In most cases — **don't**. Swap when one of these applies:
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Case</Table.Th>
+      <Table.Th>What to supply</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>High-security / enterprise — tokens must not survive a reload</Table.Td>
+      <Table.Td>In-memory or sessionStorage</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Server-side / Edge runtime (Node, Cloudflare Workers, Deno Deploy)</Table.Td>
+      <Table.Td>Redis / KV / Durable Object</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>At-rest encryption (PII in LocalStorage forbidden by policy)</Table.Td>
+      <Table.Td>Custom adapter with symmetric encryption</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## In-memory adapter
+
+The session will not survive a reload — the user will sign in again on every page load. For private/high-security environments this is an intentional trade-off.
+
+```ts
+import { AuthClient, BillingClient, type StorageAdapter } from '@monetize.software/sdk/core';
+
+const memoryStorage: StorageAdapter = (() => {
+  const m = new Map<string, string>();
+  return {
+    async getItem(k) { return m.get(k) ?? null; },
+    async setItem(k, v) { m.set(k, v); },
+    async removeItem(k) { m.delete(k); }
+  };
+})();
+
+// One shared adapter across both clients — otherwise visitor_id will desync.
+const auth = new AuthClient({ paywallId: 'pw_123', apiOrigin: '...', storage: memoryStorage });
+const billing = new BillingClient({ paywallId: 'pw_123', apiOrigin: '...', auth, storage: memoryStorage });
+```
+
+## sessionStorage adapter
+
+Session lives until the tab is closed; a reload in the same tab survives, a new tab does not.
+
+```ts
+const sessionAdapter: StorageAdapter = {
+  async getItem(k) { return window.sessionStorage.getItem(k); },
+  async setItem(k, v) { window.sessionStorage.setItem(k, v); },
+  async removeItem(k) { window.sessionStorage.removeItem(k); }
+  // No watch — sessionStorage isn't shared across tabs, so there's nothing to watch.
+};
+```
+
+<Callout type="warning">
+  Without `watch`, cross-context sync is off. Multi-tab UX will be broken: sign-in in one tab won't reflect in another. For sessionStorage that's fine (each tab is isolated by design), for custom backend adapters it isn't.
+</Callout>
+
+## Encrypted adapter (web)
+
+Symmetric encryption with a key that **itself doesn't live in storage**. Protects against trivial DevTools peeking, but not against XSS (if attacker runs JS, they grab the key too).
+
+```ts
+async function encrypt(plaintext: string, key: CryptoKey): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(ciphertext), iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decrypt(encrypted: string, key: CryptoKey): Promise<string> {
+  const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return new TextDecoder().decode(data);
+}
+
+function makeEncryptedAdapter(key: CryptoKey): StorageAdapter {
+  return {
+    async getItem(k) {
+      const raw = window.localStorage.getItem(k);
+      if (!raw) return null;
+      try { return await decrypt(raw, key); } catch { return null; }
+    },
+    async setItem(k, v) {
+      window.localStorage.setItem(k, await encrypt(v, key));
+    },
+    async removeItem(k) {
+      window.localStorage.removeItem(k);
+    },
+    watch(k, cb) {
+      const handler = async (e: StorageEvent) => {
+        if (e.key !== k || e.storageArea !== window.localStorage) return;
+        if (e.newValue == null) return cb(null);
+        try { cb(await decrypt(e.newValue, key)); } catch { cb(null); }
+      };
+      window.addEventListener('storage', handler);
+      return () => window.removeEventListener('storage', handler);
+    }
+  };
+}
+```
+
+<Callout type="warning">
+  Encryption adds an async hop on every read/write. With frequent calls (`getAccessToken()` on the hot path) it's measurable. Benchmark before shipping.
+</Callout>
+
+## Server-side: Redis / KV
+
+For headless setups (Node/Bun/Edge) where the SDK lives on your backend, you almost always need a per-user adapter — otherwise `pw-{paywallId}-auth-v1` will be shared across every user in the process.
+
+```ts
+import type { StorageAdapter } from '@monetize.software/sdk/core';
+import { Redis } from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+
+function makeUserStorage(userId: string): StorageAdapter {
+  const prefix = `monetize:${userId}:`;
+  return {
+    async getItem(k) {
+      return (await redis.get(prefix + k)) ?? null;
+    },
+    async setItem(k, v) {
+      // 30 day TTL — aligned with refresh-token expiry. The SDK updates
+      // expires_at in the payload itself; redis TTL guarantees cleanup of
+      // orphaned keys.
+      await redis.set(prefix + k, v, 'EX', 30 * 24 * 3600);
+    },
+    async removeItem(k) {
+      await redis.del(prefix + k);
+    }
+    // watch is usually unnecessary on the server — every worker has its own instance.
+  };
+}
+
+// On a handler call:
+const storage = makeUserStorage(req.user.id);
+const auth = new AuthClient({ paywallId, apiOrigin, storage });
+```
+
+Cloudflare Workers — same idea, via `env.MY_KV.get/put/delete` with a per-user prefix.
+
+<Callout type="info">
+  **Persist-per-process vs persist-per-user.** With a long-running worker the Redis adapter is mandatory (otherwise all users would overwrite each other's tokens). For a serverless function (Lambda, edge function) that lives for one request, in-memory is fine — tokens just get re-fetched via refresh on each request.
+</Callout>
+
+## Cross-context: `watch` contract
+
+`watch(key, cb)` contract:
+
+- **Fires only on cross-context changes.** Don't call `cb` for your own `setItem` (otherwise you get a loop).
+- **`value: string | null`** — `null` means either "deleted" or "never existed".
+- **`unsubscribe` is returned synchronously.** No promises.
+
+Native implementations:
+
+```ts
+// web/localStorage:
+watch(key, cb) {
+  const handler = (e: StorageEvent) => {
+    if (e.storageArea !== window.localStorage) return;
+    if (e.key !== key) return;
+    cb(e.newValue); // null when another tab removeItem'd
+  };
+  window.addEventListener('storage', handler);
+  return () => window.removeEventListener('storage', handler);
+}
+```
+
+```ts
+// chrome.storage.local:
+watch(key, cb) {
+  const handler = (changes, area) => {
+    if (area !== 'local') return;
+    const ch = changes[key];
+    if (!ch) return;
+    cb(typeof ch.newValue === 'string' ? ch.newValue : null);
+  };
+  chrome.storage.onChanged.addListener(handler);
+  return () => chrome.storage.onChanged.removeListener(handler);
+}
+```
+
+## What NOT to do
+
+- **Don't store the session in cookies.** SDK 3.0 is intentionally cookie-free — it works in Chrome extensions, Telegram Mini Apps, and partitioned storage environments. Cookies don't.
+- **Don't write your own `lastLoginEmail` over `pw-{paywallId}-last-login-email`.** The SDK will overwrite it.
+- **Don't double-prefix keys in your adapter.** The SDK already prefixes with `pw-` and `paywallId`. Double prefixing is a migration bug.
+- **Don't add `watch` to an in-memory adapter.** Cross-context sync requires multiple processes; for a single process `watch` is meaningless and only breaks unit tests.
+
+## Utilities
+
+```ts
+import { createStorage, ensureVisitorId, generateVisitorId, STORAGE_KEYS } from '@monetize.software/sdk/core';
+
+// Build an adapter with auto-detection (or return what you pass in):
+const storage = createStorage(/* override?: StorageAdapter */);
+
+// Resolve visitor_id (reads from storage, generates and saves if missing):
+const visitorId = await ensureVisitorId(storage);
+
+// Generate a fresh UUID v4 (for tests):
+const id = generateVisitorId();
+```
+
+`STORAGE_KEYS` is a typed object of every key the SDK writes. Useful for migrations / debugging:
+
+```ts
+console.log(STORAGE_KEYS.authSession('pw_123'));     // 'pw-pw_123-auth-v1'
+console.log(STORAGE_KEYS.userState('pw_123', '<identity_hash>'));
+```
+
+## Next steps
+
+- [Security](/docs-v2/sdk-v3/security) — why `localStorage` (not `HttpOnly cookies`), threat model, XSS mitigations.
+- [Session management](/docs-v2/sdk-v3/auth/session) — `AuthSession`, refresh, cross-context.
+- [BillingClient](/docs-v2/sdk-v3/bootstrap) — what gets persisted in bootstrap.

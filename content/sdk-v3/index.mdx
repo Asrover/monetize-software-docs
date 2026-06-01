@@ -1,0 +1,105 @@
+import { Callout, Cards, Table } from 'nextra/components';
+
+# Client-Side SDK 3.0
+
+Bundled paywall SDK for the web, Chrome extensions and Telegram apps. Distributed as the npm package `@monetize.software/sdk`, rendered without an iframe inside a Shadow DOM, supports every payment channel (Stripe, Paddle, Chargebee, Freemius, Overpay).
+
+<Callout type="info">
+  **SDK 3.0 vs the previous Client-Side SDK.** The legacy "Client-Side SDK" (script-tag `wall.x.x.js` + iframe) [keeps working](/docs-v2/sdk-v2/client-side/install-paywall) and remains supported; we recommend SDK 3.0 for new projects. If you're shipping a Chrome extension, 3.0 is the only option that passes CWS review (no remote code, no iframe).
+</Callout>
+
+## Pick your integration path
+
+Three scenarios, one SDK. Pick by how much UI you want to own and where your auth lives.
+
+<Cards>
+  <Cards.Card
+    title="Browser — drop-in PaywallUI"
+    href="/docs-v2/sdk-v3/browser-paywall-ui"
+    description="Ready-made paywall modal in Shadow DOM with built-in auth (email / OTP / OAuth). The fastest path — no backend, no UI work. Works in SPAs, Chrome extensions, Telegram Mini Apps."
+  />
+  <Cards.Card
+    title="Browser — custom UI"
+    href="/docs-v2/sdk-v3/browser-custom-ui"
+    description="You render your own pricing page and login UI; the SDK provides BillingClient + AuthClient methods plus the API Gateway for metered AI. Full control over every pixel."
+  />
+  <Cards.Card
+    title="Headless / server-side"
+    href="/docs-v2/sdk-v3/headless"
+    description="Your own backend, your own auth, your own UI. Use the SDK's /core export from Node / Bun / Edge — or hit the REST API directly from any backend language."
+  />
+</Cards>
+
+<Callout type="info">
+  **Not sure?** Most integrations start with [Browser — drop-in](/docs-v2/sdk-v3/browser-paywall-ui) for fast time-to-paywall, then graduate to one of the other paths if needed. You can switch — the same `paywallId` works across all three.
+</Callout>
+
+## Architecture
+
+SDK 3.0 is split into three layers — pull only what you need, the rest stays out of your bundle.
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Module</Table.Th>
+      <Table.Th>Import</Table.Th>
+      <Table.Th>What it does</Table.Th>
+      <Table.Th>Used by</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>**Core**</Table.Td>
+      <Table.Td>`@monetize.software/sdk/core`</Table.Td>
+      <Table.Td>API client, `BillingClient`, `AuthClient`, `EventTracker`. No UI, no Preact.</Table.Td>
+      <Table.Td>Custom UI, Headless</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**UI**</Table.Td>
+      <Table.Td>`@monetize.software/sdk/ui`</Table.Td>
+      <Table.Td>`PaywallUI` — paywall rendering in Shadow DOM, ready-made screens.</Table.Td>
+      <Table.Td>Drop-in PaywallUI</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>**Full**</Table.Td>
+      <Table.Td>`@monetize.software/sdk`</Table.Td>
+      <Table.Td>Core + UI in one import. Convenient for most integrations.</Table.Td>
+      <Table.Td>Either browser path</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Companion packages
+
+<Cards>
+  <Cards.Card
+    title="@monetize.software/sdk-extension"
+    href="/docs-v2/sdk-v3/installation#chrome-extension-mv3"
+    description="Chrome Extension MV3 — wraps SDK 3.0 in an offscreen document so a single state is shared across popup, content scripts, and the service worker."
+  />
+  <Cards.Card
+    title="@monetize.software/sdk-react"
+    href="/docs-v2/sdk-v3/react"
+    description="Provider, hooks (usePaywallUser, usePaywallAccess, usePaywallPrices), and declarative components — works in both browser scenarios."
+  />
+</Cards>
+
+## What's next
+
+<Cards>
+  <Cards.Card
+    title="Quickstart"
+    href="/docs-v2/sdk-v3/quickstart"
+    description="Zero to paywall in ~10 minutes — code snippets for all three paths"
+  />
+  <Cards.Card
+    title="Installation"
+    href="/docs-v2/sdk-v3/installation"
+    description="npm install, web vs Chrome extension setup, manifest, host_permissions"
+  />
+  <Cards.Card
+    title="Migration from v2"
+    href="/docs-v2/sdk-v3/migration-from-v2"
+    description="Moving from script-tag SDK to a bundled package"
+  />
+</Cards>

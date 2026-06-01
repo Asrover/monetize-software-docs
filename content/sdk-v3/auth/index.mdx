@@ -1,0 +1,210 @@
+import { Callout, Cards, Table } from 'nextra/components';
+
+# Authentication
+
+`AuthClient` is the SDK 3.0 sign-in client: email+password, OTP code, OAuth (Google/Apple/...), password reset, and anonymous sessions. It persists the session locally (localStorage / `chrome.storage.local` / memory), refreshes the access token on a timer, and emits `onAuthChange` on login, refresh, and logout.
+
+```ts
+import { AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({ paywallId: 'pw_123' });
+await auth.ready(); // wait for session hydration from storage
+
+if (auth.getCachedUser()) {
+  // user is already signed in from a previous session
+}
+```
+
+## Principles
+
+- **Single source of truth** for the session — `AuthClient`. Any `BillingClient` accepts it as an option and automatically attaches `Authorization: Bearer <access>` to every API request, plus syncs `identity` from `auth.user`.
+- **Default persistence** — `localStorage` on web, `chrome.storage.local` on extensions (auto-detected), in-memory as a fallback. You can supply your own `StorageAdapter`.
+- **Lazy refresh.** `getAccessToken()` refreshes itself when expiry is less than 60s away. A network error returns the current token (still valid); a 401 on refresh signs the user out (refresh token revoked).
+- **Refresh deduplication.** Parallel `getAccessToken()` calls share a single inflight refresh request to the backend.
+
+<Callout type="info">
+  **No cookies.** SDK 3.0 is deliberately built around Bearer tokens so the same code runs in a Chrome extension, Telegram Mini App and a regular browser without juggling `SameSite`/`partitioned` cookies.
+</Callout>
+
+## Sign-in methods
+
+<Cards>
+  <Cards.Card
+    title="Email & password"
+    href="/docs-v2/sdk-v3/auth/email-password"
+    description="Classic signIn / signUp with password and email-confirmation handling"
+  />
+  <Cards.Card
+    title="Email OTP"
+    href="/docs-v2/sdk-v3/auth/otp"
+    description="Sign in / sign up with one email — 6-digit code via mail"
+  />
+  <Cards.Card
+    title="Password reset"
+    href="/docs-v2/sdk-v3/auth/password-reset"
+    description="Recovery email + new password via AuthClient"
+  />
+  <Cards.Card
+    title="OAuth"
+    href="/docs-v2/sdk-v3/auth/oauth"
+    description="Google, Apple, GitHub, Facebook via popup with PKCE"
+  />
+  <Cards.Card
+    title="Anonymous sign-in"
+    href="/docs-v2/sdk-v3/auth/anonymous"
+    description="signInAnonymously, resume after signOut, upgradeAnonymousToEmail"
+  />
+  <Cards.Card
+    title="Session management"
+    href="/docs-v2/sdk-v3/auth/session"
+    description="onAuthChange, signOut, refresh, manual getAccessToken"
+  />
+</Cards>
+
+## API at a glance
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Method</Table.Th>
+      <Table.Th>What it does</Table.Th>
+      <Table.Th>Returns</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`signInWithEmail({email, password})`</Table.Td>
+      <Table.Td>Sign in with password</Table.Td>
+      <Table.Td>`AuthSession`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`signUp({email, password})`</Table.Td>
+      <Table.Td>Sign up. With email-confirm enabled returns `confirmation_required` without a session</Table.Td>
+      <Table.Td>`SignUpResult`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`sendOtp({email})`</Table.Td>
+      <Table.Td>Sends a 6-digit code to the email</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`verifyOtp({email, token, type?})`</Table.Td>
+      <Table.Td>Verifies the code → session</Table.Td>
+      <Table.Td>`AuthSession`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`requestPasswordReset({email})`</Table.Td>
+      <Table.Td>Recovery email with a code</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`updatePassword({password})`</Table.Td>
+      <Table.Td>Updates the password of the signed-in user</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`signInWithOAuth({provider})`</Table.Td>
+      <Table.Td>OAuth via popup with PKCE</Table.Td>
+      <Table.Td>`AuthSession`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`startOAuthFlow({provider})` / `completeOAuthFlow({state, code})`</Table.Td>
+      <Table.Td>Low-level split of `signInWithOAuth` for offscreen-architecture (used by `@monetize.software/sdk-extension`). Most hosts call `signInWithOAuth` instead.</Table.Td>
+      <Table.Td>`{authorize_url, state}` / `AuthSession`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`signInAnonymously({captchaToken?, userMeta?, forceNewAnon?})`</Table.Td>
+      <Table.Td>Anonymous sign-in. Idempotent + resumes the same anon user via stored refresh-token. Parallel calls dedupe.</Table.Td>
+      <Table.Td>`AuthSession`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`upgradeAnonymousToEmail({email, password, idempotencyKey?})`</Table.Td>
+      <Table.Td>Upgrades an anonymous user to email/password without losing balances. With email-confirm enabled returns `confirmation_required`.</Table.Td>
+      <Table.Td>`UpgradeAnonymousResult`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`signOut({forgetAnonymous?})`</Table.Td>
+      <Table.Td>Logout — clears local state first, then best-effort hits the server</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`revokeAllSessions()`</Table.Td>
+      <Table.Td>"Sign out everywhere" — invalidates ALL of this user's refresh tokens across every device</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`resendConfirmation({email})`</Table.Td>
+      <Table.Td>Resends the confirmation email after signUp with email-confirm. 429 = rate limit (~1/minute)</Table.Td>
+      <Table.Td>`void`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`refresh()`</Table.Td>
+      <Table.Td>Forces a refresh — usually unnecessary, refresh is lazy</Table.Td>
+      <Table.Td>`AuthSession \| null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getAccessToken()`</Table.Td>
+      <Table.Td>Bearer token for APIs; lazy refresh near expiry</Table.Td>
+      <Table.Td>`string \| null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getCachedSession()` / `getCachedUser()`</Table.Td>
+      <Table.Td>Sync snapshot, no network</Table.Td>
+      <Table.Td>`AuthSession \| AuthUser \| null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`getLastLogin()`</Table.Td>
+      <Table.Td>Last login method + email from storage. Useful for UI prefill ("Continue as user@example.com via Google").</Table.Td>
+      <Table.Td>`LastLogin \| null`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`onAuthChange(cb)`</Table.Td>
+      <Table.Td>Subscription with a discriminated `event`: INITIAL_SESSION (always first), SIGNED_IN/SIGNED_OUT/TOKEN_REFRESHED/USER_UPDATED/PASSWORD_RECOVERY. Callback: `(event, session) => void`</Table.Td>
+      <Table.Td>`unsubscribe`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`ready()`</Table.Td>
+      <Table.Td>Promise that resolves when the session has hydrated from storage</Table.Td>
+      <Table.Td>`Promise<void>`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`destroy()` / `isDestroyed()`</Table.Td>
+      <Table.Td>Tears down storage subscriptions and clears listeners. Call on host teardown (SPA route change, hot reload, tests).</Table.Td>
+      <Table.Td>`void` / `boolean`</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Sign in without a layout: `paywall.openAuth()`
+
+For returning customers who already have a subscription and just need to sign in (so the SDK picks up their purchases), `PaywallUI` exposes a dedicated handle:
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+const paywall = new PaywallUI({ paywallId: 'pw_123' });
+
+document.getElementById('login').onclick = () => paywall.openAuth();
+```
+
+`openAuth()` opens the modal directly on the auth form (email + OAuth buttons per `settings.auth_providers`), without the price layout. After successful sign-in the modal closes; Back also closes (the user came for sign-in only). Without `auth` (no managed-auth) it's a no-op.
+
+Symmetric to `openSupport()` — a short path to a single task without the full paywall flow.
+
+## Wiring with BillingClient
+
+Pass `auth` to `BillingClient` — the token and identity will be attached automatically, no `getAuthToken` callback needed.
+
+```ts
+import { AuthClient, BillingClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({ paywallId: 'pw_123' });
+const billing = new BillingClient({ paywallId: 'pw_123', auth });
+
+await billing.bootstrap();    // identity = auth.user; Bearer attached
+const user = await billing.getUser();
+```
+
+<Callout type="warning">
+  If you set `identity` explicitly on `BillingClient` — after the first `onAuthChange` event (including `INITIAL_SESSION` on hydration) auto-sync overwrites it with `auth.user`. Don't mix both approaches on the same instance.
+</Callout>

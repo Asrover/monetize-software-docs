@@ -1,0 +1,283 @@
+import { Callout, Table, Tabs } from 'nextra/components';
+
+# Hooks
+
+Every hook in `@monetize.software/sdk-react` is safe before the Provider mounts (returns `null` / `{ status: 'loading' }`) — they can be called in SSR without `'use client'` wrappers. They're all built on `useSyncExternalStore` or on a `useEffect` subscription to SDK events with correct cleanup.
+
+## Summary
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Hook</Table.Th>
+      <Table.Th>Returns</Table.Th>
+      <Table.Th>Re-renders when</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>`usePaywall()`</Table.Td>
+      <Table.Td>`PaywallUI \| null`</Table.Td>
+      <Table.Td>instance changes (rare)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallState()`</Table.Td>
+      <Table.Td>`PaywallStateSnapshot`</Table.Td>
+      <Table.Td>any state-machine change (open / view / error)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallUser()`</Table.Td>
+      <Table.Td>`PaywallUserState` (`loading` \| `guest` \| `signed_in`)</Table.Td>
+      <Table.Td>`userChange` + `authChange`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallAccess(opts?)`</Table.Td>
+      <Table.Td>`{ status, result }`</Table.Td>
+      <Table.Td>`userChange` + `purchase_completed`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallPrices()`</Table.Td>
+      <Table.Td>`{ prices, loading, error }`</Table.Td>
+      <Table.Td>bootstrap refresh (`ready` event)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallOffer(priceId)`</Table.Td>
+      <Table.Td>`ResolvedOffer \| null`</Table.Td>
+      <Table.Td>`ready` + 1Hz tick while the countdown is live</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallOffers()`</Table.Td>
+      <Table.Td>`PaywallOffer[] \| null`</Table.Td>
+      <Table.Td>`ready` (bootstrap refresh)</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallTrial()`</Table.Td>
+      <Table.Td>`TrialStatus \| null`</Table.Td>
+      <Table.Td>`trial_blocked` / `trial_expired`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallVisibility()`</Table.Td>
+      <Table.Td>`VisibilityStatus \| null`</Table.Td>
+      <Table.Td>`ready` / `visibility_blocked`</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`usePaywallEvent(event, cb)`</Table.Td>
+      <Table.Td>—</Table.Td>
+      <Table.Td>(subscription, doesn't trigger re-renders by itself)</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## `usePaywall()`
+
+The raw `PaywallUI` instance. `null` before the Provider mounts. Every other hook is built on top of it.
+
+```tsx
+const paywall = usePaywall();
+// ...
+<button onClick={() => paywall?.open()}>Upgrade</button>;
+```
+
+Use it when you need direct access to `paywall.billing` / `paywall.auth` / modal methods that aren't covered by the other hooks.
+
+## `usePaywallState()`
+
+Modal state: `open`, `view`, `error`. Implemented on top of `paywall.onStateChange` + `paywall.getState` via `useSyncExternalStore` — correct concurrent-rendering semantics (no tearing, snapshot stable within a single React commit) and minimal re-renders (snapshot equality by `Object.is`).
+
+```tsx
+function PaywallStatus() {
+  const { open, view, error } = usePaywallState();
+
+  if (view === 'loading') return <Spinner />;
+  if (view === 'error') return <ErrorBox err={error!} />;
+  if (view === 'awaiting_payment') return <p>Paying in new tab…</p>;
+  return null;
+}
+```
+
+`view` is one of `'loading' | 'error' | 'layout' | 'auth' | 'support' | 'awaiting_payment' | 'popup_blocked' | 'purchased' | null`. Details — in [PaywallUI → state machine](/docs-v2/sdk-v3/ui#state-machine).
+
+Before Provider mount / on SSR it returns `{ open: false, view: null, error: null }`.
+
+## `usePaywallUser()`
+
+Returns a discriminated `PaywallUserState` union describing **who the current user is** from the host's point of view. The shape combines three signals — Provider readiness, the managed-auth session, and the `BillingClient` user snapshot — so the consumer can branch on a single `status` field instead of guessing what `null` means.
+
+```ts
+export type PaywallUserState =
+  | { status: 'loading'; user: null; session: null }
+  | { status: 'guest'; user: null; session: null }
+  | {
+      status: 'signed_in';
+      user: PaywallUser | null;
+      session: AuthSession | null;
+    };
+```
+
+- **`loading`** — `<PaywallProvider>` hasn't mounted the instance yet (SSR / pre-mount / StrictMode double-mount cleanup). Render a skeleton.
+- **`guest`** — there's no identity:
+  - managed-auth: `paywall.auth.getCachedSession()` returned `null`;
+  - hybrid (no managed-auth): bootstrap finished, but the user snapshot is empty.
+
+  Safe to show a `<PaywallButton mode="signin">` CTA.
+- **`signed_in`** — there's an identity. `user` is the latest `BillingClient` snapshot (may be `null` while `/me` is in flight after a fresh sign-in — show a skeleton, not a sign-in CTA). `session` is the managed-auth `AuthSession`, or `null` in hybrid mode.
+
+```tsx
+function Account() {
+  const account = usePaywallUser();
+
+  if (account.status === 'loading') return <Skeleton />;
+  if (account.status === 'guest') return <SignInCTA />;
+  if (!account.user) return <Skeleton />;
+
+  return (
+    <Profile
+      email={account.user.email}
+      isPro={account.user.has_active_subscription}
+    />
+  );
+}
+```
+
+The hook subscribes to **both** `userChange` and `authChange`, so sign-in / sign-out transitions rerender consumers automatically — no manual `paywall.on(...)` wiring needed. The snapshot reference is cached internally so `useSyncExternalStore` stays loop-free.
+
+`getCachedUser()` returns reference-stable snapshots between no-op refreshes, so React skips re-renders automatically.
+
+## `usePaywallAccess(opts?)`
+
+**The main hook for gating features.** Wraps `paywall.getAccess(opts)` with no side-effects: the modal isn't mounted, trial storage isn't moved. Re-fetches automatically on `userChange` and `purchase_completed`.
+
+```tsx
+export type PaywallAccessState =
+  | { status: 'loading'; result: null }
+  | { status: 'ready'; result: PaywallAccessResult };
+```
+
+```tsx
+function PremiumGate() {
+  const access = usePaywallAccess();
+  const paywall = usePaywall();
+
+  if (access.status === 'loading') return <Skeleton />;
+  if (access.result.access === 'blocked') {
+    return <button onClick={() => paywall?.open()}>Upgrade</button>;
+  }
+  return <PremiumFeature />;
+}
+```
+
+`opts: GetAccessOptions` mirrors `paywall.getAccess(opts)` — `skipTrial?: boolean` / `skipVisibility?: boolean`. The hook only restarts the effect when the actual flag values change, so referential stability of `opts` is unnecessary.
+
+`access.result.reason` narrows:
+
+- `access === 'granted'`: `'has_subscription' | 'visibility_blocked' | 'trial_blocked'`;
+- `access === 'blocked'`: `'no_subscription'`.
+
+<Callout type="info">
+  Not to be confused with `<PaywallGate>` — the component that wraps `usePaywallAccess` plus loading/fallback/children rendering. See [Components → PaywallGate](/docs-v2/sdk-v3/react/components#paywallgate).
+</Callout>
+
+## `usePaywallPrices()`
+
+Paywall prices for your own pricing page or cards. Initial sync read from `getCachedPrices()` + first `getPrices()` request + subscription to the `ready` event.
+
+```tsx
+export interface PaywallPricesState {
+  prices: PaywallPrice[] | null;
+  loading: boolean;
+  error: Error | null;
+}
+```
+
+```tsx
+function PricingCards() {
+  const { prices, loading, error } = usePaywallPrices();
+
+  if (loading && !prices) return <Skeleton />;
+  if (error) return <ErrorBox err={error} />;
+
+  return prices?.map((p) => (
+    <PriceCard key={p.id} price={p} />
+  ));
+}
+```
+
+Locale overrides for `label`/`description` under `navigator.language` are applied automatically.
+
+`local: { currency, amount }` is the geo-converted price (e.g. RUB for a user in Russia), separate from the base `currency`/`amount`. Independent of browser language.
+
+## `usePaywallTrial()`
+
+Current `TrialStatus`. `null` until the trial has been checked (host hasn't called `open()` / `getAccess()`) or the trial is disabled in the paywall config.
+
+```tsx
+function TrialBanner() {
+  const trial = usePaywallTrial();
+  if (!trial?.blocked) return null;
+
+  if (trial.mode === 'opens') {
+    return <Banner>{trial.remainingActions} free actions left</Banner>;
+  }
+
+  if (trial.mode === 'time') {
+    const minutes = Math.ceil(trial.remainingMs / 60_000);
+    return <Banner>{minutes} min of trial left</Banner>;
+  }
+
+  return null;
+}
+```
+
+Trial models in detail — in [Trial](/docs-v2/sdk-v3/trial).
+
+## `usePaywallVisibility()`
+
+Server-computed visibility snapshot. `null` until bootstrap loads or the backend hasn't computed visibility for this paywall yet.
+
+```tsx
+function GeoFallback({ children }) {
+  const visibility = usePaywallVisibility();
+  if (visibility && !visibility.visible) {
+    return <SoftBlock reason={visibility.reason} country={visibility.country} />;
+  }
+  return children;
+}
+```
+
+`reason: 'country_not_match' | 'device_not_match' | 'disabled' | null`. Useful for rendering your own fallback ("service unavailable in your country") without opening the modal.
+
+## `usePaywallEvent(event, handler)`
+
+Declarative subscription to an SDK event with automatic unsubscribe on unmount. Inside, the handler is held in a `useRef`, so you **don't need `useCallback`** — the subscription only rebuilds when `event` or the paywall instance changes.
+
+```tsx
+function PurchaseToast() {
+  const queryClient = useQueryClient();
+
+  usePaywallEvent('purchase_completed', ({ priceId, restored }) => {
+    if (restored) return;
+    toast.success(`Purchase ${priceId} complete`);
+    queryClient.invalidateQueries(['user']);
+  });
+
+  return null;
+}
+```
+
+All event types and payloads — in [Events](/docs-v2/sdk-v3/events).
+
+<Callout type="info">
+  **`usePaywallEvent` vs `useEffect`?** `usePaywallEvent` keeps the callback fresh via a ref — your handler always sees the latest props, subscription doesn't rebuild. Manual `useEffect` + `paywall.on(...)` forces you to either `useCallback` the handler or rebuild on every render. The hook eliminates both.
+</Callout>
+
+## SSR notes
+
+- On the server, `usePaywall()` is always `null`. Every hook above returns a typed fallback (`null`, `{ open: false }`, `{ status: 'loading' }`).
+- `usePaywallState()` uses `useSyncExternalStore(_, _, getServerSnapshot)` — `getServerSnapshot` returns a stable `{ open: false, view: null, error: null }` reference to avoid hydration mismatch.
+- Inside `<PaywallProvider>` the Provider creates `PaywallUI` only in `useEffect` (client-only) — the SDK constructor touches `window/queueMicrotask` and must not run on the server.
+
+## Next steps
+
+- [Components](/docs-v2/sdk-v3/react/components) — `<PaywallGate>`, `<PaywallButton>`, `<PaywallSupportButton>`.
+- [Events](/docs-v2/sdk-v3/events) — types for every event subscribed to by the hooks.
+- [BillingClient](/docs-v2/sdk-v3/bootstrap) — what's under `usePaywallAccess` / `usePaywallUser` / `usePaywallPrices`.
