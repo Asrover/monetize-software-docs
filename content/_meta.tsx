@@ -26,13 +26,11 @@ export default {
     title: 'Examples',
     type: 'page',
     href: 'https://monetize-software-sdk-nextjs-example.vercel.app/',
-    newWindow: true
   },
   'ai-agent-pack': {
     title: 'AI agent (llms.txt)',
     type: 'page',
     href: '/llms-sdk-v3.txt',
-    newWindow: true
   },
   roadmap: {
     title: 'Roadmap',
