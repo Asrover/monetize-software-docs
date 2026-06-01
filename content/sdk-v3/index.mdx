@@ -1,12 +1,8 @@
 import { Callout, Cards, Table } from 'nextra/components';
 
-# Client-Side SDK 3.0
+# SDK 3.0
 
-Bundled paywall SDK for the web, Chrome extensions and Telegram apps. Distributed as the npm package `@monetize.software/sdk`, rendered without an iframe inside a Shadow DOM, supports every payment channel (Stripe, Paddle, Chargebee, Freemius, Overpay).
-
-<Callout type="info">
-  **SDK 3.0 vs the previous Client-Side SDK.** The legacy "Client-Side SDK" (script-tag `wall.x.x.js` + iframe) [keeps working](/docs-v2/sdk-v2/client-side/install-paywall) and remains supported; we recommend SDK 3.0 for new projects. If you're shipping a Chrome extension, 3.0 is the only option that passes CWS review (no remote code, no iframe).
-</Callout>
+Bundled paywall SDK for the web, Chrome extensions and Telegram apps — with a headless `/core` export and a REST API for server-side use. Distributed as the npm package `@monetize.software/sdk`, rendered without an iframe inside a Shadow DOM, supports every payment channel (Stripe, Paddle, Chargebee, Freemius, Overpay).
 
 ## Pick your integration path
 
@@ -96,10 +92,5 @@ SDK 3.0 is split into three layers — pull only what you need, the rest stays o
     title="Installation"
     href="/docs-v2/sdk-v3/installation"
     description="npm install, web vs Chrome extension setup, manifest, host_permissions"
-  />
-  <Cards.Card
-    title="Migration from v2"
-    href="/docs-v2/sdk-v3/migration-from-v2"
-    description="Moving from script-tag SDK to a bundled package"
   />
 </Cards>

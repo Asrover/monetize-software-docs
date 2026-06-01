@@ -40,6 +40,5 @@ export default {
   storage: 'Storage adapters',
   security: 'Security',
   errors: 'Error codes',
-  'migration-from-v2': 'Migration from v2',
   'ai-agent-prompt': 'AI agent prompt'
 };

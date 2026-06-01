@@ -4,6 +4,10 @@ import { Steps, Tabs, Callout, Cards } from 'nextra/components';
 
 SDK 3.0 covers three scenarios with one npm package: a modal in the browser, popup/content-script in a Chrome extension, and headless calls from a server. All three share **one `paywallId`** — you don't need separate paywalls per channel.
 
+<Callout type="info">
+  **Using an AI coding agent?** Feed it [`llms-sdk-v3.txt`](/llms-sdk-v3.txt) — a single-file pack with the full SDK 3.0 API and integration patterns. Cursor, Claude Code, Copilot and the like produce far more accurate code with it in context.
+</Callout>
+
 ## Before you start
 
 1. **A paywall is created** in the dashboard → "Paywalls" → "New Paywall". Remember the `paywallId` (the number in the URL).
@@ -381,10 +385,5 @@ const { remaining } = await res.json();
     title="Headless / server-side"
     href="/docs-v2/sdk-v3/headless-server"
     description="apiKey, per-user Bearer, token withdrawal, webhooks"
-  />
-  <Cards.Card
-    title="Migration from v2"
-    href="/docs-v2/sdk-v3/migration-from-v2"
-    description="Moving from script-tag SDK to bundled package"
   />
 </Cards>
