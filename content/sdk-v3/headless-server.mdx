@@ -45,7 +45,7 @@ import {
 Dashboard → **Settings** → **API keys** → **Create**. Copy the `sk_…` string; it appears once. The key is bound to your account; it can act on any paywall you own.
 
 <Callout type="warning">
-  **Never put `apiKey` into client code.** The SDK detects `window.document` and logs `[paywall] SECURITY: BillingClient.apiKey detected in browser context` on construction. Treat the key like a secret — read it from env, not from a bundle.
+  **Never put `apiKey` into client code.** The SDK detects `window.document` and **throws `apikey_in_browser` from the constructor** — a server-SDK key in a bundle exposes your whole account, so a naive client integration fails loudly instead of silently leaking. Read the key from env on a trusted backend. (Deliberate e2e tests that inject the key into a browser can pass `allowInsecureBrowserUsage: true` to downgrade the throw to a `console.error` — never use it in production.)
 </Callout>
 
 ## Initialization

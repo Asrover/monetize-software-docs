@@ -13,7 +13,7 @@ What we defend against:
 
 What we don't defend against:
 - XSS on the host page — if an attacker runs JS in your origin, the tokens are theirs (see below).
-- Reverse engineering the bundle — it's public code; any "API key" hardcoded inside is useless (for server-side keys there's an `apiKey` option with a runtime warning).
+- Reverse engineering the bundle — it's public code; any "API key" hardcoded inside is useless (the server-side `apiKey` option throws `apikey_in_browser` if it ever reaches a browser, so it can't end up in a bundle by accident).
 - Attacks on the platform's auth backend — out of scope for the SDK.
 
 ## Token storage and XSS
@@ -104,7 +104,7 @@ const auth = new AuthClient({
     <Table.Tr>
       <Table.Td>**`apiKey`**</Table.Td>
       <Table.Td>**Server-side only** (Node, Deno, Bun, Edge). Server-SDK key from the platform.</Table.Td>
-      <Table.Td>`console.error` in browsers (`window.document` detection) — you can't leak a key into a bundle.</Table.Td>
+      <Table.Td>**Throws `apikey_in_browser`** in browsers (`window.document` detection) — a naive client integration fails to construct instead of leaking the key. `allowInsecureBrowserUsage: true` downgrades it to `console.error` for e2e only.</Table.Td>
     </Table.Tr>
     <Table.Tr>
       <Table.Td>**`X-User-ID`** (`ApiGatewayClient.userId`)</Table.Td>
@@ -115,10 +115,10 @@ const auth = new AuthClient({
 </Table>
 
 ```ts
-// ❌ In the browser — the SDK warns
+// ❌ In the browser — the SDK throws on construction
 const billing = new BillingClient({
   paywallId: 'pw_123',
-  apiKey: 'sk_live_...' // SECURITY: BillingClient.apiKey detected in browser
+  apiKey: 'sk_live_...' // throws PaywallError('apikey_in_browser')
 });
 
 // ✅ In Node — fine

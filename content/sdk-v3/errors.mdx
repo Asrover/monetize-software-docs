@@ -61,6 +61,11 @@ class QuotaExceededError extends PaywallError {
       <Table.Td>Double-check the SDK init. `apiOrigin` must be the paywall's `custom_domain` from the dashboard — not `appbox.space` and not `localhost`.</Table.Td>
     </Table.Tr>
     <Table.Tr>
+      <Table.Td>`apikey_in_browser`</Table.Td>
+      <Table.Td>`BillingClient` was constructed with `apiKey` in a browser context (`window.document` present). Thrown synchronously from the constructor — a server-SDK key in client code exposes your entire account.</Table.Td>
+      <Table.Td>Move `BillingClient` to a trusted backend and read `apiKey` from env. For deliberate e2e tests injecting the key into a browser, pass `allowInsecureBrowserUsage: true` (never in production).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
       <Table.Td>`identity_required`</Table.Td>
       <Table.Td>A user-scoped method (`createCheckout`, `getCustomerPortalUrl`, `listPurchases`, `cancelSubscription`) was called without either a connected `AuthClient` or `apiKey` + `identity.email`/`identity.userId`.</Table.Td>
       <Table.Td>Browser: wire `auth: true`. Server: pass `apiKey` and call `billing.setIdentity({ email, userId })` (or set `identity` in the constructor).</Table.Td>
