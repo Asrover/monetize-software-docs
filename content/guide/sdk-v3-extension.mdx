@@ -22,6 +22,50 @@ End-to-end guide for monetizing a **Manifest V3 Chrome extension** using `@monet
 
 A standalone `@monetize.software/sdk` instance in each context (popup, content, SW) would mean three independent auth sessions, three bootstrap fetches, three trial counters. Users would have to log in every time they opened the popup. `@monetize.software/sdk-extension` solves this by running **one** SDK instance inside an offscreen document; popup and content scripts proxy calls to it through `chrome.runtime` ports.
 
+## When You Can Skip the Offscreen Document
+
+The offscreen architecture is needed only when **untrusted or DOM-less contexts** must touch billing:
+
+- **Content scripts on third-party sites** — they run inside a hostile page and must not hold the Bearer token directly (see [Security](/docs-v2/sdk-v3/security)).
+- **The service worker** — it has no DOM, so `PaywallUI` can't render there, and Chrome recycles it.
+
+If your only paywall surfaces are **privileged extension-origin pages** — the popup, a **side panel**, a **full-page tab** (`chrome-extension://…`), or the options page — you don't need the offscreen package at all. Those pages already share `chrome.storage.local` (which the SDK auto-detects), can safely hold the Bearer token, and have a DOM for `PaywallUI`. Install the **core** package and instantiate one client per surface:
+
+```bash
+pnpm add @monetize.software/sdk
+```
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk';
+
+// One instance per surface (popup / side panel / full-page tab / options).
+// `auth: true` makes PaywallUI build its own AuthClient + BillingClient;
+// reach them via paywall.auth / paywall.billing.
+const paywall = new PaywallUI({
+  paywallId: '3',
+  apiOrigin: 'https://YOUR_DOMAIN',
+  auth: true
+});
+```
+
+A login, bootstrap or balance update in one surface propagates to the others via `chrome.storage.onChanged` with no extra wiring — that's the same cross-context sync the offscreen variant relies on, minus the proxy. If you also need the metered-AI gateway, build the clients explicitly and call `billing.createApiGatewayClient()`:
+
+```ts
+import { AuthClient, BillingClient } from '@monetize.software/sdk/core';
+import { PaywallUI } from '@monetize.software/sdk';
+
+const auth = new AuthClient({ paywallId: '3', apiOrigin: 'https://YOUR_DOMAIN' });
+const billing = new BillingClient({ paywallId: '3', apiOrigin: 'https://YOUR_DOMAIN', auth });
+const paywall = new PaywallUI({ client: billing, auth, paywallId: '3', apiOrigin: 'https://YOUR_DOMAIN' });
+const gateway = billing.createApiGatewayClient();
+```
+
+<Callout type="warning">
+  **Do not write a custom `storage` adapter for this.** Inside an extension the SDK already resolves `chrome.storage.local` automatically (it checks `chrome.runtime.id`) and wires `chrome.storage.onChanged` for cross-context sync. Hand-rolling a `chrome.storage` adapter just re-implements the built-in one, and adding your own key prefix permanently couples the stored session to that adapter. Omit `storage` entirely — supply an adapter only for a genuinely different backend (encrypted store, `sessionStorage`, server-side KV; see [Storage adapters](/docs-v2/sdk-v3/storage)).
+</Callout>
+
+**Tradeoff:** each surface runs its own `AuthClient`/`BillingClient`, so two simultaneously-open surfaces each fetch bootstrap and refresh the token on their own timer (with a narrow refresh-rotation race window). Cross-context sync keeps them consistent. If many privileged pages are routinely open at once — or you need content scripts / the SW to read billing — use the single-instance offscreen architecture below instead.
+
 ## Architecture
 
 ```mermaid
