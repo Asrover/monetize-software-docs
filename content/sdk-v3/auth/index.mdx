@@ -175,21 +175,34 @@ if (auth.getCachedUser()) {
   </tbody>
 </Table>
 
-## Sign in without a layout: `paywall.openAuth()`
+## Built-in login screen (gate a feature behind sign-in): `paywall.openSignin()`
 
-For returning customers who already have a subscription and just need to sign in (so the SDK picks up their purchases), `PaywallUI` exposes a dedicated handle:
+**You don't need to build your own login UI.** `open()` always shows the price layout, but `PaywallUI` also exposes dedicated handles that open the modal **straight on the built-in auth screen** — email/password + OAuth buttons (per `settings.auth_providers`), fully styled, localized, in Shadow DOM. No custom form, no provider-icon library needed.
 
 ```ts
 import { PaywallUI } from '@monetize.software/sdk';
 
-const paywall = new PaywallUI({ paywallId: 'pw_123' });
+const paywall = new PaywallUI({ paywallId: 'pw_123', auth: true });
 
-document.getElementById('login').onclick = () => paywall.openAuth();
+// Gate a feature behind sign-in — login only, no plans:
+document.getElementById('login').onclick = () => paywall.openSignin();
+
+// New-account flow (starts on the signup form):
+document.getElementById('register').onclick = () => paywall.openSignup();
 ```
 
-`openAuth()` opens the modal directly on the auth form (email + OAuth buttons per `settings.auth_providers`), without the price layout. After successful sign-in the modal closes; Back also closes (the user came for sign-in only). Without `auth` (no managed-auth) it's a no-op.
+Use this whenever sign-in is a **precondition** rather than a purchase prompt:
 
-Symmetric to `openSupport()` — a short path to a single task without the full paywall flow.
+- A returning customer already bought and just needs to log in so the SDK picks up their subscription.
+- You want to require login before unlocking a feature, while keeping `open()` reserved for the Upgrade/plans flow.
+
+| Method | Opens on | Notes |
+| --- | --- | --- |
+| `openSignin()` | signin form | The explicit name. Use for "log in to gate a feature". |
+| `openSignup()` | signup form | Respects `allow_signup` from the paywall layout — if signup is disabled, falls back to signin. |
+| `openAuth()` | signin form | Alias of `openSignin()`, kept for backwards compatibility. |
+
+After successful sign-in the modal closes; Back also closes it (the user came only to log in). The trial doesn't block these flows. Without `auth` connected (no managed-auth) they're a no-op — there's no one to sign in. Symmetric to `openSupport()` — a short path to a single task without the full paywall flow.
 
 ## Wiring with BillingClient
 
