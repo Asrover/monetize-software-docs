@@ -125,6 +125,10 @@ pnpm add @monetize.software/sdk-extension preact
 
 Add `"identity"` if you enable OAuth in the paywall. Add `"content_scripts"` only if you render the paywall on third-party sites.
 
+<Callout type="info">
+  **`host_permissions` for your API origin is optional.** Our API sends `Access-Control-Allow-Origin: *` on `/api/v1/*` with every SDK header allowed, and the SDK fetches with `credentials: 'omit'` — so calls from extension pages, the offscreen document and the service worker all succeed under **plain CORS, without any host permission**. Keep the line only as a hedge: with `host_permissions` the extension bypasses CORS entirely and stays immune to future changes in the API's CORS config. It is **not** needed for cookie auth (the SDK is Bearer-only) and does **not** help content scripts — in MV3 they can't bypass CORS via host permissions, which is exactly why billing routes through the offscreen/background. For the strictest CWS manifest, drop it.
+</Callout>
+
 <Callout type="warning">
   **Do NOT set `host_permissions: ["<all_urls>"]`** unless your extension genuinely needs to inject content on every site. CWS reviewers manually audit `<all_urls>` extensions, and AV vendors (Avast, Kaspersky) flag them. The SDK itself only needs your API origin.
   See [host_permissions deep-dive](/docs-v2/sdk-v3/installation#host_permissions--что-выбрать).
@@ -227,7 +231,7 @@ Same shape as web — see [SaaS Web guide → backend webhooks](/docs-v2/guide/s
 
 Submitting to the Chrome Web Store with paid features attracts extra scrutiny.
 
-- [ ] `host_permissions` is the **narrowest** set you actually use — your custom paywall domain for backend, plus specific domains if you have content scripts
+- [ ] `host_permissions` is the **narrowest** set you actually use — for the API origin it's optional (our API is `ACAO: *`, SDK is Bearer + `credentials: 'omit'`); keep only as a CORS hedge or add specific domains if you have content scripts
 - [ ] Privacy policy link in the listing covers payment data, email collection, and analytics
 - [ ] “Permission justification” fields explain *each* permission with a user-facing reason
 - [ ] You don't list `offscreen.html` (or any internal page) in `web_accessible_resources`
