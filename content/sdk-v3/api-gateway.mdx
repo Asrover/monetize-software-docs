@@ -50,6 +50,40 @@ try {
 }
 ```
 
+## In a Chrome extension
+
+In an MV3 extension you use `@monetize.software/sdk-extension`, where `BillingClient`/`AuthClient` are proxied to the offscreen document. The gateway factory `billing.createApiGatewayClient()` is **not** available there — `paywall.billing` is a remote proxy and does not mirror it. Instead, **construct `ApiGatewayClient` yourself** from `@monetize.software/sdk/core` and pass the extension's auth as the source: the Bearer is still resolved once in offscreen via `getAccessToken()`, so there is a single AuthClient and no token duplication.
+
+```ts
+import { PaywallUI } from '@monetize.software/sdk-extension';
+// Import BOTH symbols from the same core entry — see the warning below.
+import { ApiGatewayClient, QuotaExceededError } from '@monetize.software/sdk/core';
+import type { AuthClient } from '@monetize.software/sdk/core';
+
+const paywall = new PaywallUI({ paywallId: 'pw_123', apiOrigin, auth: true });
+
+const gateway = new ApiGatewayClient({
+  paywallId: 'pw_123',
+  apiOrigin,                                    // same custom_domain as PaywallUI
+  auth: paywall.auth as unknown as AuthClient,  // RemoteAuthClient, duck-typed; Bearer comes from offscreen
+  onChargeSuccess: () => {
+    // The extension billing lives in offscreen — force a refetch so the UI counter updates.
+    void paywall.billing.getBalances({ force: true }).catch(() => {});
+  },
+  onQuotaExceeded: () => paywall.open()         // 402 → show the paywall
+});
+
+try {
+  const res = await gateway.call({ providerId: 'prov_openai_chat', path: 'v1/chat/completions', body });
+} catch (e) {
+  if (e instanceof QuotaExceededError) paywall.open();
+}
+```
+
+<Callout type="warning">
+  **Import `ApiGatewayClient` _and_ `QuotaExceededError` from the same `@monetize.software/sdk/core` entry.** The extension content bundle inlines its own copy of `sdk`. If you construct the gateway from one copy and check `instanceof QuotaExceededError` against another (e.g. a symbol re-exported from `sdk-extension`), the class identities differ and `instanceof` silently returns `false`. Constructing the gateway from `@monetize.software/sdk/core` keeps it aligned with the error you catch. This is also why `sdk-extension` deliberately does **not** re-export these symbols.
+</Callout>
+
 ## Principles
 
 - **Raw `Response`.** `gateway.call()` returns a plain `fetch` Response, not a wrapper. The caller decides: `.json()`, `.text()`, `.body.getReader()`, async-iter — everything works out of the box. The SDK doesn't ship its own SSE parser — parse raw chunks yourself or use your existing streaming library.

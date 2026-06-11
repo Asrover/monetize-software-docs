@@ -104,6 +104,12 @@ After approval:
 - In the offscreen page — `startOffscreenServer({ paywallId, apiOrigin, auth: true })`.
 - In popup/content-script — `new PaywallUI({ paywallId, apiOrigin, auth: true })`,
   `paywall.open()`.
+- For the metered AI gateway — the `billing.createApiGatewayClient()` factory is NOT
+  available in the extension channel (`paywall.billing` is a remote proxy). Build
+  `new ApiGatewayClient({ paywallId, apiOrigin, auth: paywall.auth })` from
+  `@monetize.software/sdk/core` (the Bearer still resolves once in offscreen). Import
+  `ApiGatewayClient` AND `QuotaExceededError` from the SAME `@monetize.software/sdk/core`
+  (never from `sdk-extension`) so `instanceof` works, and handle `QuotaExceededError`.
 - Subscribe to `purchase_completed` — every tab sees the upgrade via storage.watch.
 
 Rules:
