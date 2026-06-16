@@ -11,7 +11,7 @@ The point of routing through us is that **your provider API keys never leave our
 </Callout>
 
 <Callout type="warning">
-  **Headless / your own backend?** Don't use `ApiGatewayClient` server-side — your backend already has the provider keys and can call OpenAI/Anthropic directly with lower latency. Debit credits after success via [`withdrawTokens`](/docs-v2/sdk-v3/headless-server#token-withdrawal) (one POST with `X-Api-Key`). The gateway exists for browser scenarios; routing through it from your own server adds a network hop for no benefit.
+  **Headless / your own backend?** Don't use `ApiGatewayClient` server-side — your backend already has the provider keys and can call OpenAI/Anthropic directly with lower latency. Debit credits after success via [`billing.debitTokens()`](/docs-v2/sdk-v3/headless-server#token-credit-and-debit) (`apiKey` + identity). The gateway exists for browser scenarios; routing through it from your own server adds a network hop for no benefit.
 </Callout>
 
 ## Quick start
@@ -263,7 +263,7 @@ sequenceDiagram
   />
   <Cards.Card
     title="Headless / server-side"
-    href="/docs-v2/sdk-v3/headless-server#token-withdrawal"
-    description="From your own backend — call providers directly and debit credits via withdrawTokens"
+    href="/docs-v2/sdk-v3/headless-server#token-credit-and-debit"
+    description="From your own backend — call providers directly and credit/debit balances via creditTokens/debitTokens"
   />
 </Cards>

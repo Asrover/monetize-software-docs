@@ -302,9 +302,9 @@ const checkout = await billing.createCheckout({
   **Got your own auth?** This is the canonical pattern: `apiKey` server-side + `identity` from your user record. Every server method (`createCheckout`, `listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`, support tickets) accepts this combination — no need to register users in monetize.software's auth. For state syncing, use [webhooks](/docs-v2/webhooks/events).
 </Callout>
 
-#### Option B: metered AI billing via `withdrawTokens`
+#### Option B: metered AI billing via `debitTokens`
 
-You already have a backend talking to OpenAI/Anthropic with your own provider keys. After each successful call, debit credits from the user's balance with one HTTP request:
+You already have a backend talking to OpenAI/Anthropic with your own provider keys. After each successful call, debit credits from the user's balance:
 
 ```ts
 // 1. Call the provider yourself
@@ -313,24 +313,16 @@ const aiResponse = await openai.chat.completions.create({
   messages: [{ role: 'user', content: 'Hello' }]
 });
 
-// 2. Debit credits on success
-const res = await fetch(`${process.env.PAYWALL_ORIGIN}/api/v1/withdraw-tokens`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-Api-Key': process.env.MONETIZE_API_KEY!
-  },
-  body: JSON.stringify({
-    paywall_id: '3',
-    user_id: ourUserId,        // see below — must be our auth user.id
-    tokens: 1,
-    token_type: 'standard'
-  })
-});
-const { remaining } = await res.json();
+// 2. Debit credits on success (server-SDK: apiKey + identity)
+billing.setIdentity({ email: 'user@example.com' }); // or { userId: 'your-stable-id' }
+const { count } = await billing.debitTokens({ type: 'standard', amount: 1 });
+// throws PaywallError('insufficient') if the balance can't cover it
+
+// Granting tokens (promo, refund, top-up) is the mirror call:
+await billing.creditTokens({ type: 'standard', amount: 100 });
 ```
 
-`user_id` here is the monetize.software auth user.id. You get it from webhook events (`subscription.created` → `data.user.id`) after the user goes through `createCheckout` once, and store it next to your own user record.
+Identify the user by `email`, or by your own stable `userId` — which is the monetize.software auth user.id you get from webhook events (`subscription.created` → `data.user.id`) after the first `createCheckout` and store next to your own user record.
 
 <Callout type="info">
   **Why not `ApiGatewayClient`?** The gateway exists so **browser-only** apps can do metered AI without exposing provider keys. Your backend already has those keys; routing through us would just add a network hop. The gateway is browser/extension scope, not headless.
@@ -339,7 +331,7 @@ const { remaining } = await res.json();
 </Steps>
 
 <Callout type="info">
-  **What's next:** [Headless / server-side](/docs-v2/sdk-v3/headless-server) — full server-side guide (apiKey setup, token withdrawal, webhooks, error handling). [API Gateway](/docs-v2/sdk-v3/api-gateway) — only when you don't have a backend (SPA / Chrome extension / Telegram Mini App).
+  **What's next:** [Headless / server-side](/docs-v2/sdk-v3/headless-server) — full server-side guide (apiKey setup, token credit/debit, webhooks, error handling). [API Gateway](/docs-v2/sdk-v3/api-gateway) — only when you don't have a backend (SPA / Chrome extension / Telegram Mini App).
 </Callout>
 
 </Tabs.Tab>
@@ -384,6 +376,6 @@ const { remaining } = await res.json();
   <Cards.Card
     title="Headless / server-side"
     href="/docs-v2/sdk-v3/headless-server"
-    description="apiKey, per-user Bearer, token withdrawal, webhooks"
+    description="apiKey, per-user Bearer, token credit/debit, webhooks"
   />
 </Cards>

@@ -408,7 +408,82 @@ curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/support/ticket \
   }'
 ```
 
+### `POST /api/v1/paywall/{id}/balances`
+
+Credit **or** debit a user's token balance for a tokenized paywall. This is the SDK 3.0 way (preferred over the legacy `/api/v1/withdraw-tokens` below) — it backs `billing.creditTokens()` / `billing.debitTokens()`. Use it to grant tokens (promo, refund, manual top-up) or to debit after your backend called an AI provider itself.
+
+**Auth** — `X-Api-Key` only (server-side). Bearer is **not** accepted: a user must never be able to change their own balance.
+
+**Headers**
+
+```
+Content-Type: application/json
+X-Api-Key: sk_live_...
+```
+
+**Body** — identify the user by `email` or `user_id` (same identity model as the other v1 endpoints; the user must be linked to this paywall):
+
+```json
+{
+  "email": "user@example.com",
+  "type": "gpt-4",
+  "amount": 100,
+  "op": "credit"
+}
+```
+
+- `email` *or* `user_id` — required (one of). `user_id` is the monetize.software auth `user.id`.
+- `type` — required. Must match a `tokenization_queries[].type` configured on the paywall.
+- `amount` — required, positive integer.
+- `op` — required: `"credit"` (add) or `"debit"` (subtract).
+
+The change is **atomic** on the backend (no lost updates vs concurrent `api-gateway` debits). A credit above the daily-trial limit is **not** clawed back — the daily trial top-up only raises balances up to the limit, never reduces a higher one.
+
+**Response (200)**
+
+```json
+{
+  "success": true,
+  "user_id": "auth-uuid",
+  "type": "gpt-4",
+  "count": 142,
+  "balances": [{ "type": "gpt-4", "count": 142 }]
+}
+```
+
+`count` is the new balance for `type`.
+
+**Errors** — JSON `{ error, code }`:
+
+| Status | `code` | When |
+|---|---|---|
+| 400 | `insufficient` (+ `available`) | A debit would drop below 0 — balance left unchanged |
+| 400 | `invalid_op` / `invalid_amount` / `type_required` | Bad body |
+| 401 | — | `X-Api-Key` missing/invalid |
+| 403 | — | Key owner is not the paywall creator |
+| 404 | `identity_not_found` | No user with that `email`/`user_id` linked to this paywall |
+
+**curl**
+
+```bash
+# credit 100 tokens
+curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/balances \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{ "email": "user@example.com", "type": "gpt-4", "amount": 100, "op": "credit" }'
+
+# debit 5 tokens
+curl -X POST https://YOUR_DOMAIN/api/v1/paywall/3/balances \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{ "user_id": "auth-uuid", "type": "gpt-4", "amount": 5, "op": "debit" }'
+```
+
 ### `POST /api/v1/withdraw-tokens`
+
+<Callout type="info">
+  **Legacy.** Predates SDK 3.0 — debit-only, with `paywall_id` + `user_id` in the body. Still supported for back-compat, but new integrations should use `POST /api/v1/paywall/{id}/balances` above (credit + debit, atomic, identity by email/userId).
+</Callout>
 
 Debits credits from a user's balance for a tokenized paywall. Use this when your backend calls AI providers directly (your own OpenAI/Anthropic keys) and only needs to charge after a successful response.
 
@@ -473,7 +548,7 @@ Only `start-checkout` requires explicit idempotency — pass a UUID v4 in `Idemp
 
 `cancelSubscription` is naturally idempotent on the acquirer side — sending the same cancellation twice has no effect; the second call returns `400 Subscription is already cancelled`.
 
-`withdrawTokens` is **not** idempotent — every call debits. Build your own dedup if your retry logic needs it (e.g., store an `idempotency_key` next to each AI-call record in your DB and skip the debit if it's already there).
+The balance endpoints (`POST /api/v1/paywall/{id}/balances` and the legacy `withdrawTokens`) are **not** idempotent — every call credits/debits. Build your own dedup if your retry logic needs it (e.g., store an `idempotency_key` next to each AI-call record in your DB and skip the adjustment if it's already there).
 
 ## Webhooks
 
@@ -500,6 +575,6 @@ If you're on a JS runtime (Node / Bun / Deno / Edge / Workers) — these are the
 
 <Cards>
   <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="bootstrap, createCheckout, listPurchases, cancelSubscription, getCustomerPortalUrl, support tickets" />
-  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="apiKey + identity pattern, withdrawTokens, webhook handler, per-user storage" />
+  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="apiKey + identity pattern, creditTokens/debitTokens, webhook handler, per-user storage" />
   <Cards.Card title="Customer portal" href="/docs-v2/sdk-v3/customer-portal" description="Building your own My Subscriptions UI on top of these endpoints" />
 </Cards>

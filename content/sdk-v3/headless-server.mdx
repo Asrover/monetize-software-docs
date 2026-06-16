@@ -9,14 +9,14 @@ SDK 3.0 works on the server (Node, Bun, Deno, Cloudflare Workers, Edge functions
 </Callout>
 
 <Callout type="info">
-  **One auth path for headless integrations: `apiKey` + `identity`.** The server-SDK key from the dashboard identifies *you* (the paywall owner); `identity.email` (or `identity.userId`) names the user you're acting on behalf of. Every server method — `createCheckout`, `getCustomerPortalUrl`, `listPurchases`, `cancelSubscription`, `createSupportTicket`, token withdrawal — accepts this combination. You don't need to register users in monetize.software's auth.
+  **One auth path for headless integrations: `apiKey` + `identity`.** The server-SDK key from the dashboard identifies *you* (the paywall owner); `identity.email` (or `identity.userId`) names the user you're acting on behalf of. Every server method — `createCheckout`, `getCustomerPortalUrl`, `listPurchases`, `cancelSubscription`, `createSupportTicket`, `creditTokens` / `debitTokens` — accepts this combination. You don't need to register users in monetize.software's auth.
 </Callout>
 
 ## When you need this
 
 - **Custom checkout UX** — your own pricing page, you create checkout sessions on the backend and redirect users.
 - **Customer portal** — your own UI for cancel/renew/payment-history.
-- **Metered AI billing** — your backend already talks to OpenAI/Anthropic (you own the provider keys); after each successful call, debit credits from the user's balance via `withdrawTokens` (a single HTTP call).
+- **Metered AI billing** — your backend already talks to OpenAI/Anthropic (you own the provider keys); after each successful call, debit credits from the user's balance via `billing.debitTokens()` (and grant them with `billing.creditTokens()`).
 - **Webhook fan-out** — receive Stripe/Paddle/Freemius webhooks, persist subscription state in your DB, then notify your app.
 - **Server-rendered access checks** — read `has_active_subscription` in a Next.js Server Component / Remix loader.
 
@@ -143,9 +143,9 @@ Everything in `BillingClient` works server-side. The methods that traditionally 
       <Table.Td>`apiKey` + `identity` (or Bearer)</Table.Td>
     </Table.Tr>
     <Table.Tr>
-      <Table.Td>**no SDK wrapper** — raw `fetch`</Table.Td>
-      <Table.Td>`POST /api/v1/withdraw-tokens`</Table.Td>
-      <Table.Td>`X-Api-Key`</Table.Td>
+      <Table.Td>`billing.creditTokens({...})` / `billing.debitTokens({...})`</Table.Td>
+      <Table.Td>`POST /api/v1/paywall/[id]/balances`</Table.Td>
+      <Table.Td>`apiKey` + `identity` (server-only)</Table.Td>
     </Table.Tr>
   </tbody>
 </Table>
@@ -200,82 +200,54 @@ return Response.json({ ticketId: ticket.id });
 
 Bearer auth, if present, ignores the `email` field and uses the session email (anti-spoofing). With `apiKey` only — `email` (or `identity.email`) is mandatory.
 
-## Token withdrawal
+## Token credit and debit
 
-The endpoint exists, but there's no SDK wrapper. Call it directly when your backend talks to OpenAI/Anthropic on its own and only needs to debit credits from the user's balance:
+For tokenized paywalls you can adjust a user's balance straight from your backend — **credit** tokens (a promo grant, a refund, a manual top-up) or **debit** them (your backend called OpenAI/Anthropic itself and only needs to deduct credits). Server-SDK only: a browser/Bearer client must never be able to change its own balance, so these throw `apikey_required` without an `apiKey`.
 
 ```ts
-async function withdrawTokens({
-  paywallId,
-  userId,
-  tokens,
-  tokenType = 'standard'
-}: {
-  paywallId: string;
-  userId: string;
-  tokens: number;
-  tokenType?: string;
-}): Promise<{ remaining: number }> {
-  const res = await fetch(`${process.env.PAYWALL_ORIGIN}/api/v1/withdraw-tokens`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Api-Key': process.env.MONETIZE_API_KEY!
-    },
-    body: JSON.stringify({
-      paywall_id: paywallId,
-      user_id: userId,
-      tokens,
-      token_type: tokenType
-    })
-  });
+billing.setIdentity({ email: 'user@example.com' }); // or { userId: 'your-stable-id' }
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `withdraw-tokens failed (${res.status})`);
-  }
-  return res.json(); // { success: true, remaining: number }
-}
+// Grant 100 tokens of a query type (creates the type if the user has none yet)
+const { count } = await billing.creditTokens({ type: 'gpt-4', amount: 100 });
+// → { type: 'gpt-4', count: 100 } — the new balance for that type
+
+// Debit 5 tokens — throws PaywallError('insufficient') if it would go below 0
+await billing.debitTokens({ type: 'gpt-4', amount: 5 });
 ```
 
-**Request body:**
+- `type` — the `token_type` from your paywall's tokenization config.
+- `amount` — a positive integer. Both methods return `{ type, count }` with the **new** balance for that type.
+- The change is **atomic** on the backend: a manual credit/debit won't clobber, and won't be clobbered by, concurrent `ApiGatewayClient` debits.
 
-```json
-{
-  "paywall_id": "123",
-  "user_id": "user-uuid",
-  "tokens": 5,
-  "token_type": "standard"
-}
-```
+<Callout type="info">
+  **Daily-trial safe.** A credit above the daily-trial limit is **not** clawed back — the daily top-up only raises balances *up to* the trial limit, it never reduces a higher balance. So you can safely grant a user more tokens than their trial allowance.
+</Callout>
 
-**Response (200):** `{ success: true, remaining: number }` — `remaining` is the new balance for `token_type`.
-
-**Errors:**
+**Errors** (thrown as `PaywallError` with these `code`s):
 
 <Table>
   <thead>
     <Table.Tr>
-      <Table.Th>Status</Table.Th>
+      <Table.Th>`code`</Table.Th>
       <Table.Th>Cause</Table.Th>
     </Table.Tr>
   </thead>
   <tbody>
     <Table.Tr>
-      <Table.Td>401</Table.Td>
-      <Table.Td>`X-Api-Key` missing or invalid</Table.Td>
+      <Table.Td>`apikey_required`</Table.Td>
+      <Table.Td>Called without `apiKey` (e.g. from the browser). Token changes are server-only.</Table.Td>
     </Table.Tr>
     <Table.Tr>
-      <Table.Td>403</Table.Td>
-      <Table.Td>API key inactive, or the key owner is not the paywall creator</Table.Td>
+      <Table.Td>`identity_required`</Table.Td>
+      <Table.Td>No `identity.email` / `identity.userId` set — call `setIdentity` first.</Table.Td>
     </Table.Tr>
     <Table.Tr>
-      <Table.Td>400</Table.Td>
-      <Table.Td>`paywall_id` / `user_id` missing, `tokens <= 0`, or balance insufficient</Table.Td>
+      <Table.Td>`identity_not_found`</Table.Td>
+      <Table.Td>No user with that email/userId has interacted with this paywall.</Table.Td>
     </Table.Tr>
     <Table.Tr>
-      <Table.Td>404</Table.Td>
-      <Table.Td>Paywall or user not found</Table.Td>
+      <Table.Td>`insufficient`</Table.Td>
+      <Table.Td>A debit would drop the balance below zero. No partial debit — the balance is left unchanged.</Table.Td>
     </Table.Tr>
   </tbody>
 </Table>
@@ -284,9 +256,13 @@ async function withdrawTokens({
   **Tokenized paywalls only.** Works only when the paywall has `tokenization` enabled and at least one configured `token_type`. For "regular" subscription paywalls — meaningless.
 </Callout>
 
+<Callout type="info">
+  **Legacy raw endpoint.** Pre-3.0 integrations used `POST /api/v1/withdraw-tokens` directly (raw `fetch`, `paywall_id` + `user_id` in the body, debit only). It still works for back-compat, but new integrations should use `billing.debitTokens()` / `billing.creditTokens()` — same auth model as the other server methods, with credit support and atomic updates.
+</Callout>
+
 ### Why not `ApiGatewayClient` server-side?
 
-The gateway exists so browser-only apps (SPA, Chrome extension, Telegram Mini App) can do metered AI without shipping `OPENAI_API_KEY` to the client. If you already have a backend, your backend has the provider keys — calling our gateway from there would just add a network hop. Talk to OpenAI/Anthropic directly and debit via `withdrawTokens` after success.
+The gateway exists so browser-only apps (SPA, Chrome extension, Telegram Mini App) can do metered AI without shipping `OPENAI_API_KEY` to the client. If you already have a backend, your backend has the provider keys — calling our gateway from there would just add a network hop. Talk to OpenAI/Anthropic directly and debit via `billing.debitTokens()` after success.
 
 ## Listing purchases and cancelling subscriptions
 
