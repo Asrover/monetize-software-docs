@@ -123,7 +123,7 @@ pnpm add @monetize.software/sdk-extension preact
 }
 ```
 
-Add `"identity"` if you enable OAuth in the paywall. Add `"content_scripts"` only if you render the paywall on third-party sites.
+You do **not** need the `"identity"` permission for OAuth — the SDK uses the web auth flow (`window.open` + a callback page), not `chrome.identity`, so providers keep their web redirect URLs and the manifest stays minimal. Add `"content_scripts"` only if you render the paywall on third-party sites.
 
 <Callout type="info">
   **`host_permissions` for your API origin is optional.** Our API sends `Access-Control-Allow-Origin: *` on `/api/v1/*` with every SDK header allowed, and the SDK fetches with `credentials: 'omit'` — so calls from extension pages, the offscreen document and the service worker all succeed under **plain CORS, without any host permission**. Keep the line only as a hedge: with `host_permissions` the extension bypasses CORS entirely and stays immune to future changes in the API's CORS config. It is **not** needed for cookie auth (the SDK is Bearer-only) and does **not** help content scripts — in MV3 they can't bypass CORS via host permissions, which is exactly why billing routes through the offscreen/background. For the strictest CWS manifest, drop it.
@@ -252,5 +252,5 @@ Submitting to the Chrome Web Store with paid features attracts extra scrutiny.
   <Cards.Card title="Installation deep dive" href="/docs-v2/sdk-v3/installation" description="Permissions, manifest variants, Telegram Mini App" />
   <Cards.Card title="BillingClient" href="/docs-v2/sdk-v3/bootstrap" description="Cross-context sync via storage.watch" />
   <Cards.Card title="Security" href="/docs-v2/sdk-v3/security" description="Token storage in extension contexts" />
-  <Cards.Card title="Authentication" href="/docs-v2/sdk-v3/auth" description="OAuth in extensions, identity permission" />
+  <Cards.Card title="Authentication" href="/docs-v2/sdk-v3/auth" description="OAuth in extensions via the web flow (no identity permission)" />
 </Cards>

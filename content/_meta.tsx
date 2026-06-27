@@ -25,7 +25,7 @@ export default {
   examples: {
     title: 'Examples',
     type: 'page',
-    href: 'https://monetize-software-sdk-nextjs-example.vercel.app/',
+    href: 'https://sdk-examples.vercel.app/',
   },
   'ai-agent-pack': {
     title: 'AI agent (llms.txt)',
