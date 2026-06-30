@@ -1,0 +1,305 @@
+import { Callout, Cards, Tabs, Steps, Table } from 'nextra/components';
+
+# Your backend as an AI proxy
+
+You want to keep monetize.software's sign-in (Google, Apple, email/password) and **not build your own auth** — but your backend sits between the user and an AI provider (OpenAI/Anthropic), so it has to know *who the authenticated user is* before spending their tokens. This guide wires that up end-to-end: the browser signs in with our `AuthClient`, your backend verifies the session and debits credits.
+
+<Callout type="info">
+  **The one idea to internalise: two credentials, two jobs.**
+
+  - **The user's `Authorization: Bearer` token** proves *who the user is*. Your backend uses it only to **verify identity** — never to change a balance.
+  - **Your server `X-Api-Key`** (`sk_…`) proves *you're the paywall owner*. Your backend uses it to **debit tokens**.
+
+  A user's Bearer token is deliberately powerless against the balance endpoint — otherwise a user could grant themselves free credits. So the flow is always: verify with the Bearer, then act with the apiKey.
+</Callout>
+
+Don't pass the user's email in the request body and trust it — it's trivially spoofable. The Bearer token is the only thing the client can't forge, because it's signed by our auth.
+
+## The flow
+
+```
+Browser (AuthClient session)
+   │  1. token = await auth.getAccessToken()
+   │  2. POST /chat  ── Authorization: Bearer <token> ──▶  YOUR BACKEND
+                                                              │
+   3. GET /api/v1/paywall/{id}/user  ── Authorization: Bearer <token> ──▶  monetize.software
+      ◀── { user: { id, email }, paid, balances } ──────────────────────────┘
+                                                              │  (401 ⇒ reject)
+   4. call OpenAI/Anthropic with YOUR provider key ◀──────────┤
+                                                              │
+   5. POST /api/v1/paywall/{id}/balances  ── X-Api-Key ──▶  monetize.software
+      body: { user_id, type, amount, op: 'debit' }            │
+                                                              │
+   6. return AI response ──────────────────────────────────▶  Browser
+```
+
+## Prerequisites
+
+<Steps>
+
+### Tokenization is enabled on the paywall
+
+This flow debits a **token balance**, so the paywall must have [tokenization](/docs-v2/paywall/tokenization) turned on with at least one `token_type`. The `type` you debit must match one of those. For a plain subscription paywall (no metering) you don't need any of this — just read `paid` from step 3.
+
+### You have a server `apiKey` and a custom domain
+
+- **apiKey** — Dashboard → **Settings → API keys → Create**. Copy the `sk_…` once. Keep it server-only.
+- **apiOrigin** — your [custom domain](/docs-v2/custom-domains). It's what the browser SDK is initialised with, and the host your backend calls.
+
+```bash
+PAYWALL_ID=3
+PAYWALL_ORIGIN=https://pay.yourapp.com   # your custom domain
+MONETIZE_API_KEY=sk_live_...             # server-only, never in the bundle
+```
+
+</Steps>
+
+## Step 1 — get the token on the frontend
+
+Your browser code already has an `AuthClient` (standalone, or via `PaywallUI`). Read a fresh token right before each call to your backend — `getAccessToken()` lazy-refreshes when the token is close to expiry, so **don't cache its result**.
+
+<Tabs items={['Vanilla', 'React']}>
+<Tabs.Tab>
+
+```ts
+import { AuthClient } from '@monetize.software/sdk/core';
+
+const auth = new AuthClient({ paywallId: 'pw_123', apiOrigin: 'https://pay.yourapp.com' });
+
+async function askAI(prompt: string) {
+  const token = await auth.getAccessToken();
+  if (!token) { openLogin(); return; }
+
+  const res = await fetch('https://api.yourapp.com/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ prompt })
+  });
+  return res.json();
+}
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+```tsx
+import { usePaywall } from '@monetize.software/sdk-react';
+
+function Chat() {
+  const paywall = usePaywall();
+
+  async function askAI(prompt: string) {
+    const token = await paywall?.auth?.getAccessToken();
+    if (!token) { paywall?.openAuth(); return; }
+
+    const res = await fetch('https://api.yourapp.com/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ prompt })
+    });
+    return res.json();
+  }
+  // ...
+}
+```
+
+</Tabs.Tab>
+</Tabs>
+
+See [Session management](/docs-v2/sdk-v3/auth/session) for the full `getAccessToken` / `onAuthChange` contract.
+
+## Step 2 — verify the token & resolve the user on your backend
+
+Your backend takes the incoming Bearer and calls `GET /api/v1/paywall/{id}/user` **with that same Bearer**. The response's `user.id` is the monetize.software auth id — that's the id you'll debit against. A `401` means the token is invalid or expired: reject the request.
+
+<Callout type="info">
+  In the Bearer path the identity comes entirely from the token — there are **no** query params and nothing from the request body is trusted. The `user` object (`id`, `email`, `name`) is only populated on this path; with an apiKey call it's `undefined`.
+</Callout>
+
+## Step 3 — call the AI provider, then debit
+
+Your backend owns the provider key, so call OpenAI/Anthropic directly (no reason to route through our [API Gateway](/docs-v2/sdk-v3/api-gateway) — that exists for browser-only apps). After a **successful** response, debit the user's balance with your `apiKey` and the `user_id` from step 2.
+
+<Callout type="warning">
+  **Debit after success, not before.** If the AI call throws, you haven't charged the user. The balance endpoint isn't idempotent — every call debits — so if you add retries, dedup on your side (store an idempotency key next to each AI-call record and skip the debit if it's already there).
+</Callout>
+
+## Full example
+
+<Tabs items={['Node — SDK', 'Node — raw fetch', 'curl']}>
+<Tabs.Tab>
+
+The SDK wraps the debit; verification is a plain `fetch` (the SDK's typed methods are for *your* apiKey identity, not for introspecting a third party's Bearer).
+
+```ts
+// POST /chat  —  Express / any Node handler
+import { BillingClient, PaywallError } from '@monetize.software/sdk/core';
+import OpenAI from 'openai';
+
+const ORIGIN = process.env.PAYWALL_ORIGIN!;
+const PAYWALL_ID = process.env.PAYWALL_ID!;
+const openai = new OpenAI();
+
+const billing = new BillingClient({
+  paywallId: PAYWALL_ID,
+  apiOrigin: ORIGIN,
+  apiKey: process.env.MONETIZE_API_KEY!
+});
+
+app.post('/chat', async (req, res) => {
+  // 1. pull the Bearer the browser attached
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (!token) return res.status(401).json({ error: 'no_token' });
+
+  // 2. verify it & resolve the monetize user.id
+  const who = await fetch(`${ORIGIN}/api/v1/paywall/${PAYWALL_ID}/user`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!who.ok) return res.status(401).json({ error: 'invalid_token' });
+  const { user, paid } = await who.json();
+  // optional: gate on subscription state too
+  // if (!paid) return res.status(402).json({ error: 'no_subscription' });
+
+  // 3. call the AI provider with YOUR key
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: req.body.prompt }]
+  });
+
+  // 4. debit AFTER success, against the verified user
+  try {
+    billing.setIdentity({ userId: user.id });
+    await billing.debitTokens({ type: 'gpt-4', amount: 1 });
+  } catch (e) {
+    if (e instanceof PaywallError && e.code === 'insufficient') {
+      return res.status(402).json({ error: 'out_of_credits' });
+    }
+    throw e;
+  }
+
+  res.json({ answer: completion.choices[0].message.content });
+});
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+Same flow with no SDK — pure HTTPS, drop-in for any runtime.
+
+```ts
+app.post('/chat', async (req, res) => {
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (!token) return res.status(401).json({ error: 'no_token' });
+
+  // verify
+  const who = await fetch(`${ORIGIN}/api/v1/paywall/${PAYWALL_ID}/user`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!who.ok) return res.status(401).json({ error: 'invalid_token' });
+  const { user } = await who.json();
+
+  // ... call the AI provider ...
+
+  // debit with the owner key
+  const debit = await fetch(`${ORIGIN}/api/v1/paywall/${PAYWALL_ID}/balances`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': process.env.MONETIZE_API_KEY!
+    },
+    body: JSON.stringify({ user_id: user.id, type: 'gpt-4', amount: 1, op: 'debit' })
+  });
+  if (debit.status === 400) {
+    const { code } = await debit.json();
+    if (code === 'insufficient') return res.status(402).json({ error: 'out_of_credits' });
+  }
+
+  res.json({ answer: '...' });
+});
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+The two server-to-server calls behind the flow:
+
+```bash
+# 2. verify the user's token → user.id
+curl "$PAYWALL_ORIGIN/api/v1/paywall/$PAYWALL_ID/user" \
+  -H "Authorization: Bearer $USER_BEARER"
+# → { "user": { "id": "auth-uuid", "email": "..." }, "paid": true, "balances": [...] }
+
+# 4. debit with YOUR owner key
+curl -X POST "$PAYWALL_ORIGIN/api/v1/paywall/$PAYWALL_ID/balances" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $MONETIZE_API_KEY" \
+  -d '{ "user_id": "auth-uuid", "type": "gpt-4", "amount": 1, "op": "debit" }'
+```
+
+</Tabs.Tab>
+</Tabs>
+
+## Performance: the verify hop
+
+Step 2 is one round-trip to us per request. For a high-QPS AI proxy you can cache the `token → user.id` resolution in memory, keyed by the token, with a **short** TTL (e.g. 30–60 s):
+
+```ts
+const cache = new Map(); // token → { userId, exp }
+async function resolveUser(token) {
+  const hit = cache.get(token);
+  if (hit && hit.exp > Date.now()) return hit.userId;
+  const r = await fetch(`${ORIGIN}/api/v1/paywall/${PAYWALL_ID}/user`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!r.ok) return null;
+  const { user } = await r.json();
+  cache.set(token, { userId: user.id, exp: Date.now() + 60_000 });
+  return user.id;
+}
+```
+
+<Callout type="warning">
+  Caching trades freshness for latency: a signed-out user stays "valid" until the cache entry expires. Keep the TTL short and never longer than you're comfortable serving a revoked session. We don't expose a JWKS endpoint for offline JWT verification — calling `/user` is the supported way to validate a session, and it reflects revocation immediately when you don't cache.
+</Callout>
+
+## Why not…
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Tempting shortcut</Table.Th>
+      <Table.Th>Why it's wrong</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Send `email` in the body, trust it</Table.Td>
+      <Table.Td>Spoofable — any client can claim any email. Verify the Bearer instead.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Debit with the user's Bearer</Table.Td>
+      <Table.Td>The balance endpoint rejects Bearer by design (`apikey_required`) — users must not move their own balance. Use the owner `apiKey`.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Use the Bearer to authorise *your own* API</Table.Td>
+      <Table.Td>It's a session for **our** API. Use it to resolve identity, then run your own request authorisation however you like.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Route the AI call through our API Gateway</Table.Td>
+      <Table.Td>The gateway exists so browser-only apps avoid shipping provider keys. Your backend already has the keys — calling it adds a hop for nothing.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## See also
+
+<Cards>
+  <Cards.Card title="Session management" href="/docs-v2/sdk-v3/auth/session" description="getAccessToken, getCachedSession, onAuthChange — the frontend side" />
+  <Cards.Card title="Headless / server-side" href="/docs-v2/sdk-v3/headless-server" description="BillingClient on the server, creditTokens/debitTokens, webhooks" />
+  <Cards.Card title="REST API" href="/docs-v2/sdk-v3/rest-api" description="Language-agnostic endpoint contract — /user and /balances specs" />
+  <Cards.Card title="Tokenization" href="/docs-v2/paywall/tokenization" description="Configuring token types and balances on the paywall" />
+  <Cards.Card title="Security" href="/docs-v2/sdk-v3/security" description="Bearer vs apiKey threat model" />
+</Cards>

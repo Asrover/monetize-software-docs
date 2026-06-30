@@ -12,5 +12,6 @@ export default {
   },
   'sdk-v3-web': 'SDK 3.0 — SaaS Web',
   'sdk-v3-extension': 'SDK 3.0 — Chrome Extension',
-  'sdk-v3-headless': 'SDK 3.0 — Headless / Server'
+  'sdk-v3-headless': 'SDK 3.0 — Headless / Server',
+  'sdk-v3-backend-proxy': 'SDK 3.0 — Backend AI Proxy'
 };

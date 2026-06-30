@@ -204,6 +204,10 @@ Bearer auth, if present, ignores the `email` field and uses the session email (a
 
 For tokenized paywalls you can adjust a user's balance straight from your backend — **credit** tokens (a promo grant, a refund, a manual top-up) or **debit** them (your backend called OpenAI/Anthropic itself and only needs to deduct credits). Server-SDK only: a browser/Bearer client must never be able to change its own balance, so these throw `apikey_required` without an `apiKey`.
 
+<Callout type="info">
+  **Users sign in via our paywall, not your own auth?** When the end-user logged in with `AuthClient` (Google/Apple/email) and you need to authenticate them on your backend before debiting, verify their Bearer token first (resolve `user.id` from [`GET /api/v1/paywall/[id]/user`](/docs-v2/sdk-v3/rest-api#get-apiv1paywalliduser)), then debit against that `user.id`. End-to-end recipe: [Backend AI Proxy guide](/docs-v2/guide/sdk-v3-backend-proxy).
+</Callout>
+
 ```ts
 billing.setIdentity({ email: 'user@example.com' }); // or { userId: 'your-stable-id' }
 

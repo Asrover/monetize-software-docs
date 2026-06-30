@@ -193,6 +193,10 @@ X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
 
 In Bearer path, identity comes from the token — query params are ignored.
 
+<Callout type="info">
+  **Verifying a user's token on your own backend.** This is how a third-party backend (e.g. an AI proxy) authenticates a paywall user without building its own auth: take the `Authorization: Bearer` the browser obtained from `AuthClient.getAccessToken()`, forward it here, and read the verified `user.id` from the response (`401` ⇒ invalid/expired — reject). Use that `user.id` to debit via [`/balances`](#post-apiv1paywallidbalances) with your `X-Api-Key` — the Bearer itself can't change a balance. Full walkthrough: [Backend AI Proxy guide](/docs-v2/guide/sdk-v3-backend-proxy). We don't expose a JWKS endpoint — calling this endpoint is the supported way to validate a session.
+</Callout>
+
 **Response (200)** — full shape in [BillingClient docs](/docs-v2/sdk-v3/bootstrap#getuser). Key fields:
 
 ```json
