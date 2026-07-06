@@ -4,7 +4,7 @@ import { Callout, Table } from 'nextra/components';
 
 Price experiments are configured entirely in the monetize.software dashboard (paywall editor → **A/B Experiments**) and require **zero integration code**. A share of your visitors sees variant prices, the rest see the control ones, and the dashboard reports view → purchase conversion per variant with statistical significance.
 
-Requires SDK **3.1+**. Older SDK versions simply ignore the experiment payload — their users always see the control prices, so upgrading is safe to roll out gradually.
+Requires `@monetize.software/sdk` / `sdk-react` **3.1+** (`sdk-extension` **3.2+**). Older SDK versions simply ignore the experiment payload — their users always see the control prices, so upgrading is safe to roll out gradually.
 
 ## How it works
 
