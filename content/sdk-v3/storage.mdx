@@ -124,6 +124,11 @@ import { STORAGE_KEYS } from '@monetize.software/sdk/core';
       <Table.Td>Trial counter (firstOpenAt / skipTimes). Shape depends on the paywall's trial mode.</Table.Td>
       <Table.Td>—</Table.Td>
     </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`pw-{paywallId}-exp-v1`</Table.Td>
+      <Table.Td>Sticky A/B experiment assignment (`{experimentId, variant, at}`). First-touch — later weight edits don't rebucket this device; a new experiment id overwrites it.</Table.Td>
+      <Table.Td>—</Table.Td>
+    </Table.Tr>
   </tbody>
 </Table>
 

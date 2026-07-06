@@ -1,0 +1,110 @@
+import { Callout, Table } from 'nextra/components';
+
+# A/B experiments
+
+Price experiments are configured entirely in the monetize.software dashboard (paywall editor → **A/B Experiments**) and require **zero integration code**. A share of your visitors sees variant prices, the rest see the control ones, and the dashboard reports view → purchase conversion per variant with statistical significance.
+
+Requires SDK **3.1+**. Older SDK versions simply ignore the experiment payload — their users always see the control prices, so upgrading is safe to roll out gradually.
+
+## How it works
+
+1. The bootstrap payload carries the running experiment with **all** variants (`bootstrap.experiment`). There is at most one running experiment per paywall.
+2. The SDK deterministically buckets the device: a hash of the stable visitor id (`pw-visitor-id`) and the experiment id, proportional to the traffic weights. The first assignment is persisted in storage and stays **sticky for this device** — reopening the paywall, reloading the page, or editing weights later never flips an already-bucketed visitor.
+3. For the assigned variant the SDK substitutes the variant prices into the bootstrap **before anything renders**: the modal's price grid, `getPrices()` / `getCachedPrices()`, offers and CTA references all see the variant's prices and ids. Control (and any unrecognized experiment kind) renders the paywall exactly as configured.
+4. Checkout charges whatever price id the UI shows — variant prices are real prices on the backend, so Stripe, Paddle, Chargebee, Overpay and Polar all work unchanged.
+5. Every built-in analytics event is enriched with `experiment_id` + `variant`, and `createCheckout` automatically attaches the visitor id and assignment — that's what powers the conversion report in the dashboard.
+
+<Callout type="info">
+  **Experiments never break the paywall.** Any failure — storage unavailable, malformed config, unknown experiment kind — silently falls back to the control experience.
+</Callout>
+
+## What you need to do
+
+Nothing, for the standard `PaywallUI` integration. Upgrade the SDK, start an experiment in the dashboard, watch the results.
+
+Two caveats for advanced setups:
+
+<Callout type="warning">
+  **Don't hardcode price ids.** `paywall.checkout('123')` or `<PaywallButton priceId="123">` with a hardcoded control price id bypasses the experiment — that user gets charged the control price regardless of their variant. Render your own pricing UI from `getPrices()` / `getCachedPrices()` and pass the ids they return; those are already the variant's ids for bucketed users.
+</Callout>
+
+<Callout type="warning">
+  **Keep built-in analytics enabled** (`analytics: true`, the default) while an experiment is running. The dashboard measures exposure from the SDK's `paywall_viewed` events — with `analytics: false` your variants get traffic but the report stays empty.
+</Callout>
+
+## Reading the assignment
+
+If you want to mirror the variant into your own analytics or keep host-rendered pricing consistent:
+
+```ts
+const assignment = paywall.billing.getExperimentAssignment();
+// → { experimentId: 'e7a1…', variant: 'b' } | null (no running experiment / bootstrap not loaded yet)
+
+if (assignment) {
+  amplitude.track('experiment_exposure', {
+    experiment_id: assignment.experimentId,
+    variant: assignment.variant
+  });
+}
+```
+
+The assignment is available after the first `bootstrap()` resolves (e.g. inside the `ready` event, or after `paywall.preload()`). The raw config is also on the bootstrap itself:
+
+```ts
+interface PaywallExperiment {
+  id: string;
+  kind: 'prices'; // open set — future kinds are ignored by older SDKs
+  variants: Array<{
+    key: string;    // 'control', 'b', …
+    weight: number; // relative traffic weight
+    prices?: Array<PaywallPrice & { replaces: string | null }>;
+  }>;
+  assigned_variant?: string; // stamped client-side after bucketing
+}
+
+const bootstrap = await paywall.billing.bootstrap();
+bootstrap.experiment?.assigned_variant; // 'control' | 'b' | undefined
+```
+
+## Behavior details
+
+<Table>
+  <thead>
+    <Table.Tr>
+      <Table.Th>Situation</Table.Th>
+      <Table.Th>Behavior</Table.Th>
+    </Table.Tr>
+  </thead>
+  <tbody>
+    <Table.Tr>
+      <Table.Td>Experiment stopped in the dashboard</Table.Td>
+      <Table.Td>Everyone returns to control on the next bootstrap revalidate (stale-while-revalidate window, at most ~1 hour of client cache).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>A new experiment starts</Table.Td>
+      <Table.Td>New experiment id → devices are re-bucketed from scratch. Assignments never carry over between experiments.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Same user on another device / browser / incognito</Table.Td>
+      <Table.Td>Bucketing is per-device (local visitor id), so they may land in a different variant. This is the standard trade-off of anonymous-traffic experiments.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Offers (discount countdowns)</Table.Td>
+      <Table.Td>Percentage discounts apply on top of the variant's prices, same as control.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Local (geo) prices</Table.Td>
+      <Table.Td>Variant prices are shown in the base currency (USD) for everyone; the control keeps localized prices if enabled.</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
+      <Table.Td>Chrome extension</Table.Td>
+      <Table.Td>Works identically — the assignment lives in the shared offscreen storage, so popup, content scripts and background all agree on the variant.</Table.Td>
+    </Table.Tr>
+  </tbody>
+</Table>
+
+## Next steps
+
+- [BillingClient — bootstrap and caching](/docs-v2/sdk-v3/bootstrap) — where the experiment payload lives and how it revalidates.
+- [Events](/docs-v2/sdk-v3/events) — the analytics channel that feeds the experiment report.
+- [Storage adapters](/docs-v2/sdk-v3/storage) — where the sticky assignment is persisted (`pw-{paywallId}-exp-v1`).

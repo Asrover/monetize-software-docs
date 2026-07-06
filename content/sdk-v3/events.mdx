@@ -297,6 +297,8 @@ purchase_failed, paywall_closed, trial_blocked, trial_expired, visibility_blocke
 
 Pass `analytics: false` in `PaywallUIOptions` to disable entirely. Custom endpoint / batch settings — via `analytics: { endpoint, flushIntervalMs, maxBufferSize }`. See [PaywallUIOptions.analytics](/docs-v2/sdk-v3/ui).
 
+While an [A/B experiment](/docs-v2/sdk-v3/experiments) is assigned, every event in this channel is automatically enriched with `experiment_id` + `variant` props — that's what powers the per-variant conversion report in the dashboard, so keep analytics enabled during experiments. When `open({ title })` overrides the paywall heading, `paywall_viewed` additionally carries `custom_title: true`.
+
 <Callout type="info">
   For your own analytics, subscribe via `paywall.on(...)` and forward events to your analytics SDK — don't write to the built-in batch channel directly.
 </Callout>

@@ -35,6 +35,7 @@ export default {
   'customer-portal': 'Customer portal',
   locale: 'Locale & language',
   events: 'Events',
+  experiments: 'A/B experiments',
 
   '--reference': { type: 'separator', title: 'Reference' },
   storage: 'Storage adapters',

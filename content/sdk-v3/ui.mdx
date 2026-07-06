@@ -27,7 +27,7 @@ document.getElementById('help').onclick = () => paywall.openSupport();
   <tbody>
     <Table.Tr>
       <Table.Td>`open(opts?)`</Table.Td>
-      <Table.Td>Opens the modal with the layout (prices + auth_panel/current_session per paywall config). `opts: OpenOptions` — `identity`, `skipTrial`, `skipVisibility`, `renew`.</Table.Td>
+      <Table.Td>Opens the modal with the layout (prices + auth_panel/current_session per paywall config). `opts: OpenOptions` — `identity`, `skipTrial`, `skipVisibility`, `renew`, `title`.</Table.Td>
     </Table.Tr>
     <Table.Tr>
       <Table.Td>`openAuth(opts?)`</Table.Td>
@@ -107,6 +107,20 @@ document.getElementById('help').onclick = () => paywall.openSupport();
     </Table.Tr>
   </tbody>
 </Table>
+
+### Custom title per open
+
+`open({ title })` replaces the paywall's h1 heading for this particular open — independent of the title configured in the dashboard (and of its translations). If the layout has no h1 heading block, the title is rendered as a new heading at the top. The override is scoped to the call: the next `open()` without `title` shows the configured heading again.
+
+```ts
+// Context-specific paywall — the user hit the export limit:
+paywall.open({ title: 'Unlock export' });
+
+// Generic upgrade entry point — back to the configured title:
+paywall.open();
+```
+
+`openSupport()` / `openSignin()` / `openSignup()` / `checkout()` ignore `title` — those flows don't render the layout heading. When a custom title is shown, the `paywall_viewed` analytics event carries `custom_title: true`, so overridden opens can be told apart in analytics.
 
 ## `checkout(priceId, opts?)`
 

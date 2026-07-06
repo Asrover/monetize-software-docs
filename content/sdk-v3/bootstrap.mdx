@@ -264,6 +264,8 @@ Requires an `identity.email` (or a connected `AuthClient`). Without one — thro
 
 Parallel clicks on the same `priceId` (or `idempotencyKey`) collapse to one request — both callers get the same checkout URL.
 
+Attribution is attached automatically: the request carries the stable visitor id and, when an [A/B experiment](/docs-v2/sdk-v3/experiments) is assigned, the experiment id + variant — this is what links the resulting purchase back to the paywall view/variant in analytics. Nothing to configure.
+
 ### `getBalances(opts?)` / `getCachedBalances()` / `onBalanceChange(cb, opts?)` / `refreshBalances()` / `decrementBalanceLocal(queryType)`
 
 Balance APIs for AI providers (`tokenization_queries`). Same persistence model as bootstrap with tighter thresholds (30s stale, 5min TTL) and identity-bound storage keys.
@@ -319,6 +321,14 @@ billing.getIdentity(); // → { email, userId, anonymousId } | undefined
 ### `getVisitorId()` / `getCachedVisitorId()` / `getStorage()`
 
 Low-level helpers. `getVisitorId()` resolves the stable UUID v4 from storage (used by `EventTracker`); `getStorage()` exposes the `StorageAdapter` instance for callers that want to write under custom keys.
+
+### `getExperimentAssignment()`
+
+```ts
+billing.getExperimentAssignment(): { experimentId: string; variant: string } | null;
+```
+
+Sticky [A/B experiment](/docs-v2/sdk-v3/experiments) assignment of this device, read from the materialized bootstrap. `null` — no running experiment, or the bootstrap has not loaded yet. When a variant is assigned, `bootstrap.prices` / `getPrices()` already return that variant's prices — this getter exists for mirroring the assignment into your own analytics or host UI, not for branching pricing logic by hand.
 
 ### `setBootstrap(partial)`
 

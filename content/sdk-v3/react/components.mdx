@@ -175,6 +175,11 @@ Sugar over `usePaywall().open()`. Renders a native `<button>` by default and for
       <Table.Td>Forwarded into `paywall.open(opts)` (or `paywall.checkout(priceId, opts)` when `priceId` is set).</Table.Td>
     </Table.Tr>
     <Table.Tr>
+      <Table.Td>`paywallTitle`</Table.Td>
+      <Table.Td>`string`</Table.Td>
+      <Table.Td>Forwarded as `OpenOptions.title` — replaces the paywall's h1 heading for this open, independent of the dashboard config. Named `paywallTitle` because the plain `title` prop stays the native HTML tooltip attribute. See [custom title per open](/docs-v2/sdk-v3/ui#custom-title-per-open).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
       <Table.Td>`...rest`</Table.Td>
       <Table.Td>`ButtonHTMLAttributes<HTMLButtonElement>`</Table.Td>
       <Table.Td>`className`, `disabled`, `aria-*`, `type`, `onClick` — all forwarded onto the native `<button>`. `onClick` is composed with our open handler.</Table.Td>
