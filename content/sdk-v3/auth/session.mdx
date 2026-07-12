@@ -189,6 +189,14 @@ const [users, prices, offers] = await Promise.all([
 ]);
 ```
 
+### Revoked sessions: automatic retry
+
+A session can die server-side while still looking fresh locally: a refresh-rotation race in another context (two extension pages refreshing with the same rotating token — the auth backend revokes the whole session family), `revokeAllSessions()` from another device, or clock skew. The cached access token then passes the local expiry check, but every backend call answers 401.
+
+`BillingClient` and `ApiGatewayClient` recover from this automatically: on a 401 from a request that carried a Bearer, they force one `refresh()` and replay the request with the new token. If the refresh itself gets a 401 (the family is revoked), the session is cleared, `onAuthChange` fires `SIGNED_OUT`, and the original error surfaces as `PaywallError` with `code: 'invalid_token'` — see [Error codes](/docs-v2/sdk-v3/errors). `PaywallUI` goes one step further: on a `preauth` paywall a checkout that dies this way reopens the auth gate with the checkout still pending — after re-signin the purchase resumes, and an already-paid user lands on the restored success view instead of being charged twice.
+
+Exactly one replay — a second 401 means the fresh token is also rejected, so retrying can't fix it. Stream bodies through `ApiGatewayClient` are never replayed (the first attempt consumes the stream).
+
 ## getAccessToken: scenarios
 
 <Table>
@@ -244,7 +252,9 @@ async function callMyApi(path: string) {
     headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
   if (res.status === 401) {
-    // The token could have been revoked between getAccessToken and the request — try refresh and retry
+    // The token could have been revoked between getAccessToken and the request —
+    // try refresh and retry. BillingClient/ApiGatewayClient do exactly this
+    // automatically; a hand-rolled fetch needs it explicitly.
     const fresh = await auth.refresh();
     if (!fresh) {
       redirectToLogin();

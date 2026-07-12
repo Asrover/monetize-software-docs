@@ -105,6 +105,11 @@ class QuotaExceededError extends PaywallError {
       <Table.Td>Backend returned an error without a `code` in the body — fallback to `http_${status}` (e.g. `http_500`, `http_429`). The text is in `message`, the body in `cause`.</Table.Td>
     </Table.Tr>
     <Table.Tr>
+      <Table.Td>`invalid_token`</Table.Td>
+      <Table.Td>401</Table.Td>
+      <Table.Td>The server rejected a Bearer the client still considered fresh — the session was revoked (refresh-rotation race in another context, `revokeAllSessions()`, 30-day refresh-token inactivity). Before this surfaces, the SDK already forced one token refresh and replayed the request; seeing it means the whole session is dead — it has been cleared and `onAuthChange` fired `SIGNED_OUT`. `PaywallUI` on a `preauth` paywall reopens the sign-in gate with the checkout pending. Headless: send the user to sign-in. See [Session](/docs-v2/sdk-v3/auth/session#revoked-sessions-automatic-retry).</Table.Td>
+    </Table.Tr>
+    <Table.Tr>
       <Table.Td>`upstream`</Table.Td>
       <Table.Td>502</Table.Td>
       <Table.Td>Auth backend / acquirer returned 5xx. The backend passes it through as-is, no auto-retry in the SDK.</Table.Td>
@@ -322,7 +327,18 @@ When the backend returns JSON with a `code` field in the body, the SDK passes it
 // → throw new PaywallError('weak_password', 'Password should be at least 8 characters', { status: 400, cause: <body> })
 ```
 
-If there's no `code` in the body — fallback to `http_${status}`:
+If there's no `code`, a slug-shaped `error` field is accepted as the code, and a sentence-shaped one becomes the `message`:
+
+```jsonc
+// HTTP 401 with {error: "invalid_token"} and no `code`:
+// → throw new PaywallError('invalid_token', 'Request failed', { status: 401, cause: <body> })
+
+// HTTP 400 with a human sentence in `error`:
+// { "error": "Invalid successUrl format. Must be a valid HTTP/HTTPS URL" }
+// → throw new PaywallError('http_400', 'Invalid successUrl format. …', { status: 400, cause: <body> })
+```
+
+If there's neither `code` nor `error` in the body — fallback to `http_${status}`:
 
 ```jsonc
 // HTTP 503 without a JSON body or without `code`:
