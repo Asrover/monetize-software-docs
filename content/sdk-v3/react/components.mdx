@@ -48,6 +48,11 @@ Declarative gate: `loading` → `fallback` → `children`. Powered by [`usePaywa
       <Table.Td>`boolean`</Table.Td>
       <Table.Td>Automatically call `paywall.open()` on blocked. Defaults to `false` — most hosts want an explicit CTA click first.</Table.Td>
     </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`paywallTitle`</Table.Td>
+      <Table.Td>`string`</Table.Td>
+      <Table.Td>Forwarded as `OpenOptions.title` for every open the gate triggers — both `openOnBlocked` and the fallback's `open()` callback. A gate wraps a concrete feature, so the modal can say why it appeared ("Unlock export"). See [custom title per open](/docs-v2/sdk-v3/ui#custom-title-per-open).</Table.Td>
+    </Table.Tr>
   </tbody>
 </Table>
 

@@ -122,6 +122,8 @@ paywall.open();
 
 `openSupport()` / `openSignin()` / `openSignup()` / `checkout()` ignore `title` — those flows don't render the layout heading. When a custom title is shown, the `paywall_viewed` analytics event carries `custom_title: true`, so overridden opens can be told apart in analytics.
 
+In React, [`<PaywallButton paywallTitle>`](/docs-v2/sdk-v3/react/components#paywallbutton) and [`<PaywallGate paywallTitle>`](/docs-v2/sdk-v3/react/components#paywallgate) proxy into this option.
+
 ## `checkout(priceId, opts?)`
 
 Direct checkout: get a hosted checkout URL for a specific price and open it in a new tab, **without** showing the plan list. Useful when the host renders its own pricing cards / table and the click on "Buy" should land in Stripe / Paddle / Chargebee / Freemius / Overpay directly.
