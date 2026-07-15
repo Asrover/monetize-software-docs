@@ -83,7 +83,7 @@ This is called subdomain delegation. You do NOT need to change nameservers for t
 1. **Add domain** — add the subdomain in settings
 2. **Delegate via NS** — create NS records for your subdomain pointing to DigitalOcean (ns1-3)
 3. **Verification** — we check NS records; if valid, the domain gets the status **"Waiting for moderation"**
-4. **Moderation** — moderator sets the domain to **"Verified"**
+4. **Moderation** — moderator sets the domain to **"Verified"** (usually up to 2 business days)
 5. **Link to paywall** — select the verified domain for a specific paywall and get the updated installation script
 
 ## Security
@@ -94,6 +94,7 @@ This is called subdomain delegation. You do NOT need to change nameservers for t
 ## Limitations
 
 - Maximum DNS propagation time: up to 48 hours
+- Moderation review: usually up to 2 business days after a successful NS check
 - Only third-level subdomains are supported
 - Your DNS provider must support subdomain delegation via NS records
 
