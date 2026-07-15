@@ -1,0 +1,90 @@
+import { Callout, Cards, Steps } from 'nextra/components';
+
+# Test with Our Sandbox Processors
+
+You **don't** need your own Stripe, Paddle, or any other payment account to build and test a paywall. We provide **two ready-made sandbox payment processors** that any account can connect to any paywall — no credentials, no setup, no waiting.
+
+<Callout type="info">
+  Use them to validate your entire integration first. Opening your own payment
+  provider account is only necessary when you're ready to charge real customers.
+</Callout>
+
+## What you can test with them
+
+Sandbox processors simulate payments end to end, so everything downstream of the checkout behaves the way it will in production:
+
+- **The full checkout flow** — the paywall opens, the customer picks a plan and completes payment
+- **Subscriptions** — creation, renewals and trial periods
+- **Charges and balances** — token and credit deduction if you use tokenization
+- **Access granting** — entitlement checks and feature gating in your app
+- **Webhooks** — your endpoint receives events just as it does in live mode
+- **Customer portal** — cancellations and plan changes
+
+No real money moves and no real card is ever charged.
+
+## Connecting a sandbox processor
+
+<Steps>
+
+### Step 1: Open the Payment Processor Manager
+
+Go to **Paywalls**, open your paywall, and click **Payment Processor Manager**.
+
+### Step 2: Switch to the Test tab
+
+The drawer has **Live** and **Test** tabs. Both sandbox processors always appear in the **Test** tab, listed alongside any test processors of your own. You'll recognise them by the caption:
+
+> Our sandbox processor — payments are simulated, use test card 4242 4242 4242 4242
+
+### Step 3: Select and save
+
+Tick one or both, then click **Save**. If you connect more than one, set the traffic share for each — or use **Distribute equally**.
+
+### Step 4: Pay with a test card
+
+With the paywall in test mode, open it and complete a purchase using card **4242 4242 4242 4242**, any future expiry date, and any CVC.
+
+</Steps>
+
+## Moving to live
+
+Sandbox processors are **test mode only**. They never appear in the Live tab and cannot process real payments.
+
+When you're ready to accept real money, [create your own payment processor](/docs-v2/payment-processor/create-payment-processor) in live mode and [connect it to the paywall](/docs-v2/payment-processor/connect-payment-processor).
+
+<Callout type="warning">
+  A paywall in live mode uses **only** the processors connected in the Live tab.
+  If a paywall has nothing but sandbox processors connected, it will have no way
+  to take payment once you switch it to live.
+</Callout>
+
+<Cards>
+  <Cards.Card
+    title="Create your own processor"
+    href="/docs-v2/payment-processor/create-payment-processor"
+  />
+  <Cards.Card
+    title="Connect processor to paywall"
+    href="/docs-v2/payment-processor/connect-payment-processor"
+  />
+</Cards>
+
+## FAQ
+
+<Accordion>
+  <Accordion.Item title="Do I need my own Stripe account just to try the platform?">
+    No. Our two sandbox processors are available to every account and cover the whole test flow — checkout, subscriptions, webhooks and access granting. You only need your own processor account to accept real payments.
+  </Accordion.Item>
+
+  <Accordion.Item title="Can I use a sandbox processor in live mode?">
+    No. They're restricted to test mode and won't appear in the Live tab.
+  </Accordion.Item>
+
+  <Accordion.Item title="Can I connect both sandbox processors at once?">
+    Yes. Connect both and split the traffic between them — this is a good way to rehearse a multi-processor setup before you run one for real.
+  </Accordion.Item>
+
+  <Accordion.Item title="Some processors in the list are greyed out. Why?">
+    Rows captioned "Managed processor" are platform-owned and can't be selected or edited by yourself. Contact support if you believe you should have access to one.
+  </Accordion.Item>
+</Accordion>

@@ -146,6 +146,19 @@ When multiple processors are connected to a paywall traffic is automatically spl
   focus on quality and reliability of your chosen processors.
 </Callout>
 
+## Testing Without Your Own Account
+
+You don't need a Stripe, Paddle, or any other payment account to start. Every account gets **two sandbox payment processors** provided by us, ready to connect to any paywall in test mode — no credentials, no setup.
+
+They simulate payments end to end, so you can debug the whole flow — checkout, subscriptions, renewals, charges, webhooks and access granting — before deciding on a payment provider. Opening your own account is only required when you're ready to charge real customers.
+
+<Cards>
+  <Cards.Card
+    title="Test with our sandbox processors"
+    href="/docs-v2/payment-processor/sandbox-processors"
+  />
+</Cards>
+
 ## Supported Payment Systems
 
 Our platform currently supports integration with the following payment systems:
@@ -185,6 +198,10 @@ Ready to set up your payment processors? Here's your roadmap:
 ## FAQ
 
 <Accordion>
+  <Accordion.Item title="Do I have to create my own Stripe account to test my paywall?">
+    No. Every account gets two [sandbox processors](/docs-v2/payment-processor/sandbox-processors) from us, available in the Test tab of the Payment Processor Manager. They cover the entire test flow — checkout, subscriptions, webhooks and access granting. You only need your own processor account once you want to accept real payments.
+  </Accordion.Item>
+
   <Accordion.Item title="Can I use the same payment processor for multiple paywalls?">
     Yes! One processor can serve multiple paywalls, making management easier and more cost-effective.
   </Accordion.Item>

@@ -11,7 +11,7 @@ import {
 Learn how to connect payment processors to your paywalls to enable transaction processing and handle payments effectively.
 
 <Callout>
-  **Prerequisites:** You must have at least one [payment processor created](/docs-v2/payment-processor/create-payment-processor) before connecting it to a paywall.
+  **Prerequisites:** To go live you need at least one [payment processor of your own](/docs-v2/payment-processor/create-payment-processor). To test, you don't need one at all — every account gets two [sandbox processors](/docs-v2/payment-processor/sandbox-processors) ready to connect.
 </Callout>
 
 ## Overview
@@ -46,7 +46,7 @@ The system automatically shows payment processors based on your paywall's curren
   <tbody>
     <Table.Tr>
       <Table.Td>**Test Mode**</Table.Td>
-      <Table.Td>Only test payment processors</Table.Td>
+      <Table.Td>Your test processors + our two sandbox processors</Table.Td>
       <Table.Td>Development and testing</Table.Td>
     </Table.Tr>
     <Table.Tr>
@@ -66,7 +66,7 @@ The system automatically shows payment processors based on your paywall's curren
 Choose which payment processors you want to connect to your paywall:
 
 1. **Open the Payment Processor Manager modal**
-2. **Review available processors** - You'll see a list of all payment processors created in the current mode
+2. **Review available processors** - The **Test** tab lists your own test processors plus our two [sandbox processors](/docs-v2/payment-processor/sandbox-processors); the **Live** tab lists your live processors
 3. **Select processors** - Use checkboxes to select which ones to connect
 4. **Review processor information:**
    - **Name** - Custom name you assigned
@@ -74,7 +74,11 @@ Choose which payment processors you want to connect to your paywall:
    - **Provider** - Stripe, Paddle, etc.
 
 <Callout type="info">
-  **Risk Distribution:** You can select multiple payment processors. Transactions will be divided equally between the selected acquiring services to minimize risks.
+  **No processor of your own yet?** The Test tab always contains our two sandbox processors, so you can connect one and test the full payment flow before you open a Stripe or Paddle account. See [Test with our sandbox processors](/docs-v2/payment-processor/sandbox-processors).
+</Callout>
+
+<Callout type="info">
+  **Risk Distribution:** You can select multiple payment processors and set the traffic share for each one, or use **Distribute equally** to split traffic evenly. Shares are configured per mode independently (Test vs Live).
 </Callout>
 
 ### Step 4: Save Configuration
@@ -123,21 +127,19 @@ To remove payment processors:
     - Processors are not properly configured
     
     **Solution:**
-    - Create payment processors in the correct mode
-    - Verify processor configuration
-    - Check processor status in the main dashboard
+    - In the **Test** tab you always have our two [sandbox processors](/docs-v2/payment-processor/sandbox-processors) available, even with no processors of your own
+    - For **Live**, create a payment processor in live mode
+    - Verify processor configuration and status in the main dashboard
   </Accordion.Item>
   
   <Accordion.Item title="Cannot select a processor">
-    **Possible causes:**
-    - Processor is marked as unavailable
-    - Shared processor with restricted access
-    - Processor configuration issues
-    
+    A processor is greyed out and cannot be ticked when it is **managed by the platform** — its caption reads "Managed processor — contact support to edit". These belong to us rather than to your account, so you can't connect or edit them yourself.
+
+    This does **not** apply to our sandbox processors ("Our sandbox processor — payments are simulated…"). Those are selectable by any account — see [Test with our sandbox processors](/docs-v2/payment-processor/sandbox-processors).
+
     **Solution:**
-    - Contact support for shared processors
-    - Verify processor configuration
-    - Check processor credentials and webhook setup
+    - Contact support if you believe you should have access to a managed processor
+    - For your own processors, verify credentials and webhook setup
   </Accordion.Item>
   
   <Accordion.Item title="Payments not processing">
@@ -171,7 +173,7 @@ After connecting payment processors to your paywall:
   />
   <Cards.Card 
     title="Test Payments" 
-    href="/docs-v2/paywall/demo"
+    href="/docs-v2/payment-processor/sandbox-processors"
   />
   <Cards.Card 
     title="Monitor Transactions" 

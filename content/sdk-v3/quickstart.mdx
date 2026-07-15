@@ -11,7 +11,7 @@ SDK 3.0 covers three scenarios with one npm package: a modal in the browser, pop
 ## Before you start
 
 1. **A paywall is created** in the dashboard → "Paywalls" → "New Paywall". Remember the `paywallId` (the number in the URL).
-2. **At least one payment processor is connected** (Stripe / Paddle / Chargebee / Freemius).
+2. **At least one payment processor is connected.** For testing you don't need an account of your own — connect one of our [sandbox processors](/docs-v2/payment-processor/sandbox-processors) from the Test tab. For live payments, connect your own (Stripe / Paddle / Chargebee / Freemius).
 3. If you'll be using the API Gateway (metered AI calls) — also have a `providerId` (UUID from the "API Providers" section in the dashboard).
 
 `apiOrigin` for every example is `https://YOUR_DOMAIN`. If you have a [custom domain](/docs-v2/custom-domains), substitute yours.
