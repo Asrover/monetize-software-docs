@@ -75,6 +75,11 @@ class QuotaExceededError extends PaywallError {
       <Table.Td>`listPurchases` / `cancelSubscription` (apiKey path) for an identity that's never interacted with this paywall.</Table.Td>
       <Table.Td>Verify the email/userId you pass; owner can only act on their own users. Cross-paywall lookup is blocked by design.</Table.Td>
     </Table.Tr>
+    <Table.Tr>
+      <Table.Td>`custom_domain_required`</Table.Td>
+      <Table.Td>An auth flow that builds a redirect or email link was called on a paywall without a custom domain: `signInWithOAuth`, `signUp` (confirmation email), `resendConfirmation`, `requestPasswordReset`. The backend rejects with 400 instead of sending an email whose link would be broken.</Table.Td>
+      <Table.Td>Connect a verified custom domain to the paywall (General settings in the dashboard) — this unblocks OAuth and all email links at once. Email OTP (`sendOtp` + `verifyOtp`) is the only sign-in method that works without one.</Table.Td>
+    </Table.Tr>
   </tbody>
 </Table>
 

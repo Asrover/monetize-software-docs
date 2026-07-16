@@ -26,6 +26,10 @@ if (auth.getCachedUser()) {
   **No cookies.** SDK 3.0 is deliberately built around Bearer tokens so the same code runs in a Chrome extension, Telegram Mini App and a regular browser without juggling `SameSite`/`partitioned` cookies.
 </Callout>
 
+<Callout type="warning">
+  **A custom domain is required for most sign-in methods** — OAuth popups redirect to it, and confirmation / recovery email links are built from it. Without one the backend rejects `signUp`, `resendConfirmation`, `requestPasswordReset` and `signInWithOAuth` with [`custom_domain_required`](/docs-v2/sdk-v3/errors#configuration-and-initialization). This applies to extensions too. The only method that works without a custom domain is [Email OTP](/docs-v2/sdk-v3/auth/otp) (the 6-digit code is entered in the UI, no link involved). Connect a verified domain in the paywall's General settings.
+</Callout>
+
 ## Sign-in methods
 
 <Cards>

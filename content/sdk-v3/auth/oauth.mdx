@@ -10,6 +10,10 @@ const session = await auth.signInWithOAuth({ provider: 'google' });
 
 The method is async: resolves after the full cycle (popup opened → user signed in at the provider → callback page posted the code → backend exchanged it for a session).
 
+<Callout type="warning">
+  OAuth requires a [custom domain](/docs-v2/custom-domains) connected to the paywall — the popup's callback page lives on it. Without one the backend rejects the init call with [`custom_domain_required`](/docs-v2/sdk-v3/errors#configuration-and-initialization) and the popup never opens. This applies to extensions too.
+</Callout>
+
 ## signInWithOAuth
 
 <Tabs items={['Signature', 'Parameters', 'Returns']}>
