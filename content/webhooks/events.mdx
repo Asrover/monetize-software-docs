@@ -341,6 +341,10 @@ Updated `subscription.current_period_start` and `subscription.current_period_end
 
 </Steps>
 
+<Callout type="warning">
+  If the first charge after the trial fails, the subscription moves to `past_due` instead: you will receive `subscription.updated` with `status: "past_due"`, possibly alongside a short-lived `active` update emitted while the provider attempts the charge. Always apply the event with the latest `occurred_at` timestamp rather than the last one delivered.
+</Callout>
+
 **If user cancels during trial:**
 
 <Steps>
@@ -521,20 +525,23 @@ const handleSubscriptionCreated = async (data) => {
 ### 1. Handle Event Order
 
 <Callout type="warning">
-  **Event Order:** Events may not always arrive in chronological order. Always check timestamps and handle out-of-order events.
+  **Event Order:** Events may not always arrive in chronological order. Always check timestamps and handle out-of-order events. Use `occurred_at` (the payment provider's event time) when present, falling back to `created_at` — two events emitted seconds apart may be delivered in any order.
 </Callout>
 
 ```javascript
+const eventTime = (event) => new Date(event.occurred_at || event.created_at);
+
 const handleEventWithOrder = async (event) => {
   const lastProcessedTime = await getLastProcessedTime(event.data.user.id);
 
-  if (new Date(event.created_at) < lastProcessedTime) {
-    console.log('Out of order event, handling carefully...');
+  if (eventTime(event) < lastProcessedTime) {
+    console.log('Out of order event, skipping stale status update...');
     // Handle out-of-order event logic
+    return;
   }
 
   await processEvent(event);
-  await updateLastProcessedTime(event.data.user.id, event.created_at);
+  await updateLastProcessedTime(event.data.user.id, eventTime(event));
 };
 ```
 

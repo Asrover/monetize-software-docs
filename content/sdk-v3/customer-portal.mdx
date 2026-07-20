@@ -148,7 +148,7 @@ To upgrade a plan or restart a cancelled subscription — open the paywall in re
 paywall.open({ renew: true });
 ```
 
-This skips the `has_active_subscription` check (otherwise the user would land in the restored success view) and passes `ignoreActivePurchase: true` to `/start-checkout`. The acquirer creates a new subscription; the old one cancels at period end.
+This skips the `has_active_subscription` check (otherwise `open()` is suppressed for an already-subscribed user — the modal doesn't mount and the SDK emits `purchase_completed{restored: true}`) and passes `ignoreActivePurchase: true` to `/start-checkout`. The acquirer creates a new subscription; the old one cancels at period end.
 
 In a React app:
 
