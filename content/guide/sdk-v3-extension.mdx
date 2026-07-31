@@ -146,11 +146,23 @@ You do **not** need the `"identity"` permission for OAuth — the SDK uses the w
 import { installRouter } from '@monetize.software/sdk-extension/sw';
 
 installRouter({
-  offscreenUrl: chrome.runtime.getURL('offscreen.html')
+  offscreenUrl: chrome.runtime.getURL('offscreen.html'),
+  // Your custom_domain — the same value PaywallUI and startOffscreenServer get.
+  apiOrigin: 'https://your-paywall-domain.com'
 });
 ```
 
 That's the entire SW. The router lazily creates the offscreen document the first time popup/content sends a message, and proxies subsequent calls.
+
+<Callout type="warning">
+  **Pass `apiOrigin` if your paywall lives in the toolbar action popup.** OAuth returns the auth code by `postMessage` to the window that opened the provider — and Chrome destroys an action popup as soon as that window takes focus. Whether it does is decided by the OS window manager, so the same extension signs in fine on one machine and silently fails on another: the popup vanishes, nothing happens, and opening DevTools appears to fix it (DevTools keeps the popup alive).
+
+  With `apiOrigin` set, the service worker watches for the provider's redirect landing on your callback page, reads the code out of the URL, and lets the offscreen document — which holds the PKCE verifier — finish the sign-in without the popup. **No extra permission is needed**: the URL is already visible through the `host_permissions` entry for that origin.
+
+  If the sign-in was gating a checkout, that continues as well: offscreen creates it the moment the session lands and the worker sends the same tab to the payment page, so the user goes from the provider straight to paying instead of reopening the extension to click buy again.
+
+  It cannot help if the offscreen document itself died mid-flow (extension reload, browser restart), and provider *errors* arrive in the URL fragment, which a worker cannot read — those still end up reported as a cancellation. A **side panel** or full-page tab is immune to all of this and remains the sturdiest surface.
+</Callout>
 
 ### Offscreen — `offscreen.html` loads `offscreen.js`
 
