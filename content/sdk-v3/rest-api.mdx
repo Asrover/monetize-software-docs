@@ -182,7 +182,14 @@ Returns the user's purchases, balances, trial state, and computed geo-targeting 
 
 ```
 X-Api-Key: sk_live_...        (or Authorization: Bearer ...)
+X-Client-Ip: 203.0.113.42     (optional — see below)
 ```
+
+<Callout type="warning">
+  **Calling from your backend? Send `X-Client-Ip`.** `country` and `tier` are resolved from the IP of the request that reaches us. When your server calls this endpoint on behalf of a user — even with a Bearer token the user's browser obtained — that IP is *your server's*, so every user comes back with your datacenter's country (and its tier). Pass the end-user's IP in `X-Client-Ip` and we geo-resolve that instead. `X-Forwarded-For` does **not** work for this: our load balancer rewrites the proxy chain, so your value is ignored.
+
+  The header is a hint, and it only affects the `country`, `tier` and `countryMatch` fields of this response — targeting and pricing on the paywall itself are resolved separately, from the browser's own request.
+</Callout>
 
 **Query (apiKey path only)**
 

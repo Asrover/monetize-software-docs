@@ -119,6 +119,10 @@ Your backend takes the incoming Bearer and calls `GET /api/v1/paywall/{id}/user`
   In the Bearer path the identity comes entirely from the token — there are **no** query params and nothing from the request body is trusted. The `user` object (`id`, `email`, `name`) is only populated on this path; with an apiKey call it's `undefined`.
 </Callout>
 
+<Callout type="warning">
+  **If you read `country` / `tier` from this response, add `X-Client-Ip`.** This call originates from your server, so without the header the geo fields describe *your datacenter*, not the user — every user comes back with the same country. Forward the end-user's IP (`req.ip` / the first entry of your own `X-Forwarded-For`) as `X-Client-Ip`; passing `X-Forwarded-For` upstream has no effect, our load balancer rewrites it.
+</Callout>
+
 ## Step 3 — call the AI provider, then debit
 
 Your backend owns the provider key, so call OpenAI/Anthropic directly (no reason to route through our [API Gateway](/docs-v2/sdk-v3/api-gateway) — that exists for browser-only apps). After a **successful** response, debit the user's balance with your `apiKey` and the `user_id` from step 2.

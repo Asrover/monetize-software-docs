@@ -5,7 +5,7 @@ export default {
 
   '--browser-paywall-ui': {
     type: 'separator',
-    title: 'Browser — drop-in'
+    title: 'Browser — ready-made'
   },
   'browser-paywall-ui': 'Overview',
   ui: 'PaywallUI',
