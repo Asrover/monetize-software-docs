@@ -129,6 +129,12 @@ const balances = await billing.getBalances();
 
 const sync = billing.getCachedBalances(); // null if never loaded
 
+// A visitor without a Bearer (no AuthClient, or an AuthClient whose visitor is
+// signed out) is answered `[]` straight from memory — `/balances` would reply
+// 401, so the SDK does not spend the round-trip. Their snapshot is `[]`, never
+// null: distinguish "loading" from "no quotas" by your own auth state, not by
+// a null check.
+
 const off = billing.onBalanceChange((balances) => {
   /* re-render counter */
 });

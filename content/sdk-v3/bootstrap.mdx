@@ -280,6 +280,13 @@ billing.decrementBalanceLocal(queryType: string | undefined): void; // optimisti
 
 `Balance: { type: string; count: number }`. Details and SSE example — in [API Gateway](/docs-v2/sdk-v3/api-gateway).
 
+A visitor without a Bearer — no `AuthClient` wired up, or one whose visitor is
+signed out — gets `[]` from memory and no network request at all: `/balances`
+answers 401 to a request with no token, so the round-trip buys nothing. Their
+`getCachedBalances()` is therefore `[]` rather than `null`, and it is safe to
+call `getBalances()` (or `paywall.preload()`, which warms balances too) as often
+as your UI needs.
+
 ### Customer portal — `getCustomerPortalUrl()` / `listPurchases()` / `cancelSubscription()`
 
 For your own customer-portal UI ("My subscriptions" page). Bearer auth required (or a server `apiKey`).
