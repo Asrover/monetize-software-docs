@@ -67,7 +67,9 @@ Each webhook notification has this JSON structure:
       "id": "cus_customer123",
       "metadata": {
         "some-custom-field": "value"
-      }
+      },
+      "has_active_subscription": true,
+      "active_subscription_ids": ["sub_active123"]
     },
     "paywall": {
       "id": "123"
@@ -89,6 +91,21 @@ Each webhook notification has this JSON structure:
 | `created_at`  | string | Time the event was built on our side, ISO 8601 |
 | `occurred_at` | string | Time the event occurred at the payment provider, ISO 8601. Optional — may be absent for some providers/events. When present, prefer it over `created_at` for ordering |
 | `data`        | object | Event-specific data containing information |
+
+### User Fields
+
+`data.user` describes the **user**, not the subscription the event is about. A user can hold more than one subscription on the same paywall, so these two fields are the ones to drive access on:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | User identifier on our side |
+| `metadata` | object | Custom fields you attached to the user |
+| `has_active_subscription` | boolean | Whether the user still has **any** paid access on this paywall (`active`, `trialing` or a one-time `paid` purchase), computed when the event was built. Optional — absent if we could not read it; treat a missing field as "unknown", never as `false` |
+| `active_subscription_ids` | string[] | Ids of the subscriptions that are currently live for this user |
+
+<Callout type="warning">
+  Do not revoke access on `subscription.cancelled` alone — it reports one subscription, and the user may hold another. Check `has_active_subscription` instead. See [Multiple Subscriptions per User](/docs-v2/webhooks/events#multiple-subscriptions-per-user).
+</Callout>
 
 ## Event-Specific Fields
 

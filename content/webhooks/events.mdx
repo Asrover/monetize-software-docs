@@ -64,6 +64,10 @@ Learn about different webhook events and their usage scenarios to properly handl
 - Failed payment cancellation
 - Administrative cancellation
 
+<Callout type="warning">
+  This event reports **one subscription**, not the user's overall status. The same user may hold another, still-active subscription on the same paywall — revoke access based on `data.user.has_active_subscription`, not on the event type. See [Multiple Subscriptions per User](#multiple-subscriptions-per-user).
+</Callout>
+
 ### 5. refund.created
 
 **Description:** Creation of a refund
@@ -96,6 +100,38 @@ The `data.subscription` object in `subscription.*` events contains the following
 <Callout type="info">
   To determine whether a subscription is currently active, check `status` and `ended_at`. If `ended_at` is set and not in the future, access should be revoked even if `current_period_end` is later. If `cancel_at_period_end` is `true`, the subscription is active but will not renew.
 </Callout>
+
+## Multiple Subscriptions per User
+
+A user is **not** limited to one subscription per paywall, and events arrive per subscription. The most common way this bites integrations:
+
+| Date | What happens | Event |
+|------|--------------|-------|
+| Jul 27 | User starts a trial | `subscription.created` — `sub_A`, `trialing` |
+| Jul 30 | Trial ends, the card is declined | `subscription.updated` — `sub_A`, `past_due` |
+| Aug 2 | User pays again from scratch | `subscription.created` — `sub_B`, `active` |
+| Aug 29 | The provider gives up on `sub_A` after ~30 days of dunning | `subscription.cancelled` — `sub_A`, `canceled` |
+
+The cancellation on Aug 29 is correct, but it is about `sub_A`, which has been dead for a month. An integration that keys status off `user.id` or `customer.id` will read it as "this user cancelled" and revoke access from someone who is paying.
+
+Two rules keep this correct:
+
+1. **Key subscription state by `data.subscription.id`**, never by user or customer id.
+2. **Drive access off `data.user.has_active_subscription`**, which we compute across all of the user's purchases on that paywall at the moment the event is built.
+
+```javascript
+const handleSubscriptionCancelled = async ({ user, subscription }) => {
+  // Always record the per-subscription fact
+  await markSubscriptionCanceled(subscription.id);
+
+  // Revoke access only if nothing else is keeping the user alive.
+  // `undefined` means we could not compute it — fall back to the API
+  // rather than assuming the user has nothing.
+  if (user.has_active_subscription === false) {
+    await revokeAccess(user.id);
+  }
+};
+```
 
 ## Event Scenarios
 
@@ -528,11 +564,14 @@ const handleSubscriptionCreated = async (data) => {
   **Event Order:** Events may not always arrive in chronological order. Always check timestamps and handle out-of-order events. Use `occurred_at` (the payment provider's event time) when present, falling back to `created_at` — two events emitted seconds apart may be delivered in any order.
 </Callout>
 
+Track the watermark **per subscription**, not per user — a user may have several, and events about a dead one must never overwrite a live one.
+
 ```javascript
 const eventTime = (event) => new Date(event.occurred_at || event.created_at);
 
 const handleEventWithOrder = async (event) => {
-  const lastProcessedTime = await getLastProcessedTime(event.data.user.id);
+  const key = event.data.subscription?.id || event.data.payment?.id;
+  const lastProcessedTime = await getLastProcessedTime(key);
 
   if (eventTime(event) < lastProcessedTime) {
     console.log('Out of order event, skipping stale status update...');
@@ -541,7 +580,7 @@ const handleEventWithOrder = async (event) => {
   }
 
   await processEvent(event);
-  await updateLastProcessedTime(event.data.user.id, eventTime(event));
+  await updateLastProcessedTime(key, eventTime(event));
 };
 ```
 
