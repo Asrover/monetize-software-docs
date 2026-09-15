@@ -5,7 +5,7 @@ import { Callout, Cards, Steps, Table } from 'nextra/components';
 A dedicated UI for users to manage their subscriptions outside the paywall — list active purchases, cancel/renew, view invoices, update payment methods. SDK 3.0 provides the building blocks; you wire up your own React/Vue layout.
 
 <Callout type="info">
-  **Two layers.** The SDK exposes a typed customer-portal API on `BillingClient` (`listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`) and you build the screens. For Stripe/Paddle/Chargebee customers we also have an acquirer-hosted portal — open it via `getCustomerPortalUrl()` when you don't need a custom UI.
+  **Two layers.** The SDK exposes a typed customer-portal API on `BillingClient` (`listPurchases`, `cancelSubscription`, `getCustomerPortalUrl`) and you build the screens. For Stripe/Paddle/Chargebee/Polar customers we also have an acquirer-hosted portal — open it via `getCustomerPortalUrl()` when you don't need a custom UI.
 </Callout>
 
 ## API surface

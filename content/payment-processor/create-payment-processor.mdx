@@ -190,10 +190,10 @@ Configure the payment processor operation mode:
   </Tabs.Tab>
 
   <Tabs.Tab>
-  If you chose Freemius, you'll need credentials from the Freemius Developer Dashboard:
+  If you chose Freemius, connect your Freemius **developer account** once. After that, every paywall gets its own Freemius product, and we manage the plan, prices, trial and webhook of that product for you.
 
     <Callout type="info">
-      Sign in at the [Freemius Dashboard](https://dashboard.freemius.com/) and open your product → **Settings → Keys** to find the values below. Test mode uses your **Sandbox** keys; live mode uses **Production** keys.
+      Sign in at the [Freemius Dashboard](https://dashboard.freemius.com/), open **My Profile → Keys** (top-right menu) and copy the values below. The same keys work in both modes: a test-mode processor opens the Freemius sandbox checkout, a live-mode processor takes real payments.
     </Callout>
 
     **Required data for Freemius:**
@@ -208,42 +208,43 @@ Configure the payment processor operation mode:
       </thead>
       <tbody>
         <Table.Tr>
-          <Table.Td>**Product ID**</Table.Td>
-          <Table.Td>Numeric ID of your Freemius product</Table.Td>
-          <Table.Td>Dashboard → product page URL or Settings → Keys</Table.Td>
+          <Table.Td>**Developer ID**</Table.Td>
+          <Table.Td>Numeric ID of your Freemius developer account</Table.Td>
+          <Table.Td>My Profile → Keys</Table.Td>
         </Table.Tr>
         <Table.Tr>
-          <Table.Td>**Public Key**</Table.Td>
-          <Table.Td>Used by the Checkout to identify your product</Table.Td>
-          <Table.Td>Settings → Keys (`pk_...`)</Table.Td>
+          <Table.Td>**Developer Public Key**</Table.Td>
+          <Table.Td>Identifies your developer account in signed API requests</Table.Td>
+          <Table.Td>My Profile → Keys (`pk_...`)</Table.Td>
         </Table.Tr>
         <Table.Tr>
-          <Table.Td>**Secret Key**</Table.Td>
-          <Table.Td>Used to verify webhook signatures and to generate sandbox tokens</Table.Td>
-          <Table.Td>Settings → Keys (`sk_...`)</Table.Td>
-        </Table.Tr>
-        <Table.Tr>
-          <Table.Td>**API Token**</Table.Td>
-          <Table.Td>Bearer token for product-scope REST calls (refunds, cancellations)</Table.Td>
-          <Table.Td>Settings → API Token</Table.Td>
-        </Table.Tr>
-        <Table.Tr>
-          <Table.Td>**Plan ID**</Table.Td>
-          <Table.Td>The plan in this product whose monthly / annual / lifetime pricing fronts the connected paywall</Table.Td>
-          <Table.Td>Dashboard → your product → Plans</Table.Td>
+          <Table.Td>**Developer Secret Key**</Table.Td>
+          <Table.Td>Signs the requests that manage plans, prices and webhooks</Table.Td>
+          <Table.Td>My Profile → Keys (`sk_...`)</Table.Td>
         </Table.Tr>
       </tbody>
     </Table>
 
     <Callout type="warning">
-      **Security:** Never expose the secret key or API token. Both are server-side only.
+      **Security:** The developer secret key gives access to every product in your Freemius account. It is used only on our servers and is never exposed to buyers.
     </Callout>
 
-    **One acquirer ↔ one paywall.** Each Freemius acquirer is allowed to be connected to a single paywall at a time (a database trigger enforces this). The acquirer references one Freemius plan, and the prices on the paywall (monthly / annual / lifetime) are routed to the matching billing cycle of that plan automatically. Switching the acquirer to a different paywall later is safe — historical subscriptions keep flowing into their original paywall via the webhook handler.
+    **Connecting a paywall:**
 
-    **Plans and pricing:** Plan/pricing creation is gated behind Freemius developer-scope canonical signing (not exposed via Bearer Token). Create plans in the Freemius dashboard manually and configure their monthly / annual / lifetime prices to match the prices you set on your paywall.
+    1. In the Freemius dashboard, create a product for the paywall — one product per paywall.
+    2. Open the paywall's **Payment processor manager**, select the Freemius processor and pick the product.
+    3. Save. We create a plan with the paywall's monthly, yearly and lifetime prices (plus local prices in currencies Freemius supports), set up the trial and register the webhook in Freemius.
 
-    **Webhook setup:** Freemius does not expose webhook listener management in the public API either. After creating the payment processor, set the webhook up manually in **Dashboard → your product → Webhooks → Listeners → Add Webhook** with the URL shown in the form and subscribe to: `subscription.created`, `subscription.cancelled`, `subscription.renewal.failed`, `subscription.renewal.failed.last`, `install.trial.started`, `license.expired`, `payment.created`, `payment.refund`.
+    **Keeping prices in sync:** every time you save the paywall, its prices and trial are pushed to Freemius. Existing subscriptions keep renewing at the price they were bought at. A billing cycle removed from the paywall is removed from the Freemius plan, and a currency removed from the paywall is hidden in Freemius rather than deleted. Don't edit the plan created by monetize.software in the Freemius dashboard — the next sync overwrites it. If a sync fails, buyers are never sent to a Freemius checkout with a different price; use **Sync prices now** in the processor manager to retry.
+
+    **Limitations:**
+
+    - Freemius has no weekly billing cycle and holds one price per cycle, so weekly prices and a second monthly (or yearly) price are sold only through your other processors.
+    - Freemius sells in USD, EUR, GBP, CAD, AUD, ILS, PLN, CHF and RSD. Buyers with local prices in other currencies are routed to your other processors; if Freemius is the only processor, they pay the USD price.
+    - Disconnecting a paywall keeps the webhook in Freemius, so renewals and cancellations of subscriptions sold on it are still recorded. New Freemius sales of that product outside the paywall are not attributed to it.
+    - Offer discounts are applied with a Freemius coupon that we create for each checkout. The coupon works only for the plan and billing cycle being bought, can be redeemed once and expires in 24 hours; the discount also applies to renewals, the same way as on Stripe and Paddle. Coupon codes start with `MSO`: don't edit or delete active ones, and unused expired coupons are deleted automatically. A 100% discount can't be applied through Freemius, so such buyers are routed to your other processors; if Freemius is the only processor, they pay the full price. The same happens if Freemius doesn't respond in time when the coupon is created.
+
+    **Processors created before developer keys** keep working as they are: one product, prices configured by hand. Offer discounts are applied to them with coupons too. Open such a processor and add developer keys to switch it to automatic price sync — its paywall keeps selling while you do it.
 
   </Tabs.Tab>
 </Tabs>
@@ -273,11 +274,17 @@ After filling in all fields:
   </Accordion.Item>
 
   <Accordion.Item title="Freemius key validation error">
-    Make sure that: - Product ID is numeric and matches the product in your
-    Freemius dashboard - API Token is generated under Settings → API Token for
-    the same product - Public/Secret keys correspond to the selected mode
-    (Sandbox keys for test, Production keys for live) - The API Token has not
-    been revoked
+    Make sure that: - You copied the developer keys from My Profile → Keys, not
+    the keys of a single product - Developer ID contains only numbers - The
+    public key starts with `pk_` and the secret key with `sk_`
+  </Accordion.Item>
+
+  <Accordion.Item title="Freemius prices are not synced">
+    Open the paywall's payment processor manager and press **Sync prices now**
+    to see the exact error. Common causes: - The paywall has only weekly
+    prices, which Freemius can't sell - A local price is outside the range
+    Freemius allows for that currency - The product was deleted in Freemius or
+    belongs to another Freemius developer account
   </Accordion.Item>
 </Accordion>
 

@@ -321,7 +321,7 @@ curl -X POST https://YOUR_DOMAIN/api/paywall/cancel-subscription \
 
 ### `POST /api/v1/paywall/{id}/get-customer-portal`
 
-Returns a one-time URL to the acquirer-hosted customer portal (Stripe / Paddle / Chargebee / Overpay). Freemius does not provide a hosted portal — this endpoint returns `403` with `{ isTest }` instead.
+Returns a one-time URL to the acquirer-hosted customer portal (Stripe / Paddle / Chargebee / Polar / Overpay). Freemius does not provide a hosted portal — this endpoint returns `403` with `{ isTest }` instead. For Polar the access token needs the `customer_sessions:write` scope.
 
 **Headers**
 

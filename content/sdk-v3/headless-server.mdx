@@ -184,7 +184,7 @@ const { url } = await billing.getCustomerPortalUrl();
 return Response.json({ url });
 ```
 
-For Stripe/Paddle/Chargebee the response is a one-time login URL to the acquirer-hosted portal. Freemius doesn't have a hosted portal — the backend returns `forbidden` (`status: 403`). See [Customer portal](/docs-v2/sdk-v3/customer-portal).
+For Stripe/Paddle/Chargebee/Polar the response is a one-time login URL to the acquirer-hosted portal. Freemius doesn't have a hosted portal — the backend returns `forbidden` (`status: 403`). See [Customer portal](/docs-v2/sdk-v3/customer-portal).
 
 ### Create a support ticket
 
@@ -288,7 +288,7 @@ The backend verifies that the identity is linked to your paywall — owner of pa
 
 For most integrations you don't need `listPurchases` at all — webhooks (`subscription.created/updated/cancelled`) give you authoritative state in your own DB. Use `listPurchases` when you want fresh state on demand without waiting for webhook delivery (e.g., right after a checkout-success redirect).
 
-For `cancelSubscription`, the alternative is `getCustomerPortalUrl()` — redirect the user to the acquirer's hosted portal (Stripe/Paddle/Chargebee/Overpay). Use it when you don't want to build cancel UX yourself. Freemius has no hosted portal — `getCustomerPortalUrl()` returns 403 there, so for Freemius you call `cancelSubscription()` directly.
+For `cancelSubscription`, the alternative is `getCustomerPortalUrl()` — redirect the user to the acquirer's hosted portal (Stripe/Paddle/Chargebee/Polar/Overpay). Use it when you don't want to build cancel UX yourself. Freemius has no hosted portal — `getCustomerPortalUrl()` returns 403 there, so for Freemius you call `cancelSubscription()` directly.
 
 ## Server-rendered access checks
 
