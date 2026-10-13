@@ -11,7 +11,7 @@ Requires `@monetize.software/sdk` / `sdk-react` **3.1+** (`sdk-extension` **3.2+
 1. The bootstrap payload carries the running experiment with **all** variants (`bootstrap.experiment`). There is at most one running experiment per paywall.
 2. The SDK deterministically buckets the device: a hash of the stable visitor id (`pw-visitor-id`) and the experiment id, proportional to the traffic weights. The first assignment is persisted in storage and stays **sticky for this device** — reopening the paywall, reloading the page, or editing weights later never flips an already-bucketed visitor.
 3. For the assigned variant the SDK substitutes the variant prices into the bootstrap **before anything renders**: the modal's price grid, `getPrices()` / `getCachedPrices()`, offers and CTA references all see the variant's prices and ids. Control (and any unrecognized experiment kind) renders the paywall exactly as configured.
-4. Checkout charges whatever price id the UI shows — variant prices are real prices on the backend, so Stripe, Paddle, Chargebee, Overpay and Polar all work unchanged.
+4. Checkout charges whatever price id the UI shows — variant prices are real prices on the backend, so Stripe, Paddle, Chargebee, Overpay, Polar and Dodo Payments all work unchanged.
 5. Every built-in analytics event is enriched with `experiment_id` + `variant`, and `createCheckout` automatically attaches the visitor id and assignment — that's what powers the conversion report in the dashboard.
 
 <Callout type="info">
