@@ -18,6 +18,9 @@ export default {
   offers: 'Offers',
   faq: 'FAQ',
   '--for-ai-agents': { type: 'separator', title: 'For AI agents' },
+  mcp: {
+    title: withBadge('MCP Server', 'new')
+  },
   'llms-sdk-v3-txt': {
     title: 'llms-sdk-v3.txt (SDK 3.0 pack)',
     href: '/llms-sdk-v3.txt'

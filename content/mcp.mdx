@@ -1,0 +1,147 @@
+import { Callout, Steps, Tabs } from 'nextra/components';
+
+# MCP Server
+
+Monetize.software runs a [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI agent — Claude Code, Cursor, VS Code Copilot or your own — can work with your customers the way you do in the dashboard: look up a buyer, read their subscriptions and payments, answer their support tickets, cancel a subscription or issue a refund.
+
+Typical requests to an agent once it is connected:
+
+- "Customer anna@example.com says she paid but has no access — find out what happened."
+- "Answer all unread support tickets. Refund anyone who asks within 14 days of purchase."
+- "Cancel subscription `sub_1Q…` at period end and refund the last payment."
+- "Which payments were refunded on paywall 812 this week?"
+
+**Endpoint:** `https://monetize.software/api/mcp` (Streamable HTTP)
+
+## Connect
+
+<Steps>
+
+### Create an MCP API key
+
+In the dashboard open **Settings → API Keys**, enter a name, pick the access level and click **Create Key**. The key is shown once — copy it right away.
+
+| Access                     | What the agent can do                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| **MCP: read-only**         | Look up customers, subscriptions, payments, SDK events and support tickets              |
+| **MCP: read & write**      | Everything above, plus cancel subscriptions, refund, delete customers, answer tickets   |
+| **Server SDK**             | No MCP access — this is the key for the [server SDK](/docs-v2/sdk-v3), keep using it there |
+
+<Callout type="warning">
+  Start with a **read-only** key. A read & write key moves real money: refunds and cancellations go straight to your payment processor and cannot be undone. Give it only to agents you supervise.
+</Callout>
+
+### Add the server to your client
+
+<Tabs items={['Claude Code', 'Cursor', 'VS Code', 'Other clients']}>
+  <Tabs.Tab>
+```bash
+claude mcp add --transport http monetize-software https://monetize.software/api/mcp \
+  --header "Authorization: Bearer YOUR_MCP_KEY"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+Add to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "monetize-software": {
+      "url": "https://monetize.software/api/mcp",
+      "headers": { "Authorization": "Bearer YOUR_MCP_KEY" }
+    }
+  }
+}
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "monetize-software": {
+      "type": "http",
+      "url": "https://monetize.software/api/mcp",
+      "headers": { "Authorization": "Bearer YOUR_MCP_KEY" }
+    }
+  }
+}
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+Any client that supports remote MCP servers over Streamable HTTP with a custom header works: point it at `https://monetize.software/api/mcp` and send `Authorization: Bearer YOUR_MCP_KEY`. The key is also accepted in an `X-Api-Key` header.
+
+Clients that only launch local (stdio) servers can connect through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```bash
+npx mcp-remote https://monetize.software/api/mcp --header "Authorization: Bearer YOUR_MCP_KEY"
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Check the connection
+
+Ask the agent to "list my paywalls". If it answers with your paywalls, you are set.
+
+To test without an agent:
+
+```bash
+curl https://monetize.software/api/mcp \
+  -H "Authorization: Bearer YOUR_MCP_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_paywalls","arguments":{}}}'
+```
+
+</Steps>
+
+<Callout type="info">
+  Custom connectors added in claude.ai or Claude Desktop settings cannot send an API key header — they expect OAuth, which this server does not support yet. Use a client that lets you set a header (Claude Code, Cursor, VS Code) or `mcp-remote`.
+</Callout>
+
+## Tools
+
+The agent sees only the tools its key allows — a read-only key does not see write tools at all.
+
+### Customers, subscriptions and payments
+
+| Tool                  | Access | What it does                                                                                       |
+| --------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| `list_paywalls`       | read   | Your paywalls with their ids. Every other tool can be narrowed to one paywall.                     |
+| `find_customers`      | read   | Find a customer by **exact** email or user id                                                       |
+| `get_customer`        | read   | Profile, subscriptions and one-time purchases, token balances, recent payments                      |
+| `get_customer_events` | read   | What the customer did in your app: paywall opened, price selected, checkout started, purchase completed, trial blocked |
+| `list_subscriptions`  | read   | Subscriptions and purchases, filter by status or customer                                           |
+| `list_transactions`   | read   | Payments, renewals, refunds and adjustments, filter by type, email, subscription or date            |
+| `check_refund_status` | read   | Ask the payment processor whether a payment is already refunded                                     |
+| `cancel_subscription` | write  | Cancel at period end (access stays until it ends) or immediately (access revoked now)               |
+| `refund_subscription` | write  | Fully refund the latest paid charge of a subscription                                               |
+| `refund_transaction`  | write  | Fully refund one payment                                                                            |
+| `delete_customer`     | write  | Deactivate a customer account and sign it out. Does **not** cancel their subscriptions.            |
+
+### Support tickets
+
+| Tool                        | Access | What it does                                                                  |
+| --------------------------- | ------ | ----------------------------------------------------------------------------- |
+| `list_support_tickets`      | read   | Tickets from your customers, filter by status, customer or "unread only"      |
+| `get_support_ticket`        | read   | A ticket with its whole message thread                                        |
+| `reply_to_support_ticket`   | write  | Reply to a ticket — the customer gets it by email right away                  |
+| `create_support_ticket`     | write  | Write to a customer first — creates a ticket and emails the message           |
+| `set_support_ticket_status` | write  | Set a ticket to `open`, `pending` or `closed`                                 |
+
+Customers answer by replying to the email; their answers show up in `get_support_ticket` and in the dashboard.
+
+## Good to know
+
+- **Same rules as the dashboard.** Write tools run the exact code behind the dashboard buttons, with the same checks and the same payment-processor behavior. An agent can only reach your own paywalls and customers.
+- **Live by default.** Payment tools return live-mode data unless the agent passes `mode: "test"` for sandbox payments.
+- **Amounts** are in major units of the payment currency (`9.99`, not `999`).
+- **Cancel, then refund.** To cancel a subscription and give the money back, cancel first and refund second — so a failed refund never leaves the subscription renewing. The server tells agents to do this, and to confirm refunds and cancellations with you first.
+- **Refunds are full.** Partial refunds are not available, same as in the dashboard. Some processors do not support refunds through the API at all (for example lava.top) — the tool returns the processor's error.
+- **SDK events come from SDK 3.** Integrations on SDK v2 have no event timeline. `purchase_completed` means the browser saw the success screen; whether the money arrived is in `list_transactions`.
+- **Statuses update via webhooks.** After a cancellation or refund the subscription status changes once the payment processor's webhook arrives — usually within seconds.
+
+## Revoke a key
+
+Delete the key in **Settings → API Keys**. The agent loses access with its next request. The **Last Used** column shows when each key was last used.
