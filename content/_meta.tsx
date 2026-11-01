@@ -34,10 +34,5 @@ export default {
     title: 'AI agent (llms.txt)',
     type: 'page',
     href: '/llms-sdk-v3.txt',
-  },
-  roadmap: {
-    title: 'Roadmap',
-    type: 'page',
-    href: 'https://monetizesoftware.featurebase.app/en'
   }
 };
