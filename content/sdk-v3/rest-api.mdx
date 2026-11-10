@@ -133,6 +133,7 @@ Idempotency-Key: <uuid-v4>    (mandatory for production)
 - `email` — required in apiKey path. Ignored in Bearer path (server reads it from the token).
 - `priceId` — required. Get it from `bootstrap.prices[].id`. **Don't hardcode it** — price IDs are dynamic and change when pricing is edited, the payment processor is switched, or a plan is recreated. Always read the current value from `bootstrap` at runtime; a stale hardcoded ID returns `404`.
 - `successUrl`/`errorUrl` — optional overrides. Default to `settings.success_redirect_url` from the dashboard.
+- `errorUrl`/`shopUrl` are not used with Stripe: Stripe Checkout has no back link, so the buyer closes the tab to cancel and no `cancelled` return marker reaches your page.
 - `trial_days` — optional override on the price-level trial.
 - `ignoreActivePurchase` — pass `true` for renew/upgrade flows; otherwise the backend returns `409` if the user already has an active subscription.
 - `userMeta` — JSON metadata stored against the user's row on this paywall.

@@ -87,7 +87,7 @@ Use the [Get Prices API](/docs-v2/sdk-v2/server-side/get-prices) to retrieve ava
 | `priceId`    | string | Price ID from your paywall configuration |
 | `successUrl` | string | URL to redirect after successful payment |
 | `errorUrl`   | string | URL to redirect after payment failure    |
-| `shopUrl`    | string | URL to redirect if user cancels checkout |
+| `shopUrl`    | string | URL to redirect if user cancels checkout. Not used with Stripe: Stripe Checkout has no back link |
 
 ### Optional Fields
 

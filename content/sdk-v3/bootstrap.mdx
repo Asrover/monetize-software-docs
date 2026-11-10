@@ -239,6 +239,8 @@ Returns a checkout URL for the chosen `priceId`. Use it when you drive your own 
 billing.createCheckout(params: {
   priceId: string;
   successUrl?: string;
+  /** errorUrl / shopUrl are not used with Stripe: Stripe Checkout has no
+   *  back link. */
   errorUrl?: string;
   shopUrl?: string;
   trialDays?: number;
